@@ -22,7 +22,34 @@
   Drupal.behaviors.commerceBluesnapForm = {
     attach: function (context) {
       $('.bluesnap-form', context).once('bluesnap-processed').each(function () {
+        var jsonData = {
+          token: "HOSTEDFIELDTOKENID",
+          title: "BlueSnap Example",
+          description: "This is description for example...",
+          img: "/developers/571747/download.jpg",
+          amount: "150",
+          currency: "EUR",
+          buttonLabel: "Click to buy",
+          billingDetails: true,
+          includeEmail: true,
+          language: "EN",
+          shopperData: {
+            firstname: "Someone",
+            lastname: "JustExample"
+          }
+        }
 
+        bluesnap.openCheckout(jsonData, function (eCheckoutResult) {
+          // On success.
+          if (eCheckoutResult.code == 1) {
+
+          }
+          // On error.
+          else {
+            console.log(eCheckoutResult.data);
+          }
+          bluesnap.closeCheckout();
+        });
       });
     }
   }
