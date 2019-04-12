@@ -38,6 +38,16 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class CustomCheckout extends OnsitePaymentGatewayBase implements CustomCheckoutInterface {
 
   /**
+   * BlueSnap test API URL.
+   */
+  const BLUESNAP_API_TEST_URL = 'https://sandbox.bluesnap.com';
+
+  /**
+   * BlueSnap production API URL.
+   */
+  const BLUESNAP_API_URL = 'https://ws.bluesnap.com';
+
+  /**
    * The rounder.
    *
    * @var \Drupal\commerce_price\RounderInterface
@@ -188,6 +198,38 @@ class CustomCheckout extends OnsitePaymentGatewayBase implements CustomCheckoutI
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
     // TODO: Implement deletePaymentMethod() method.
+  }
+
+  /**
+   * Returns the username.
+   */
+  protected function getUsername() {
+    return $this->configuration['username'] ?: '';
+  }
+
+  /**
+   * Returns the password.
+   */
+  protected function getPassword() {
+    return $this->configuration['password'] ?: '';
+  }
+
+  /**
+   * Merge default BlueSnap parameters in with the provided ones.
+   *
+   * @param array $parameters
+   *   The parameters for the transaction.
+   *
+   * @return array
+   *   The new parameters.
+   */
+  protected function getParameters(array $parameters = []) {
+    $defaultParameters = [
+      'username' => $this->getUsername(),
+      'password' => $this->getPassword(),
+    ];
+
+    return $parameters + $defaultParameters;
   }
 
 }
