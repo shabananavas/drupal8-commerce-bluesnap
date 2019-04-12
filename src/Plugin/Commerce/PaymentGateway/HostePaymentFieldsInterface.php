@@ -7,11 +7,9 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorization
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 
 /**
- * Provides the interface for the Embedded Checkout payment gateway.
+ * Provides the interface for the Hosted Payment Fields payment gateway.
  */
-interface EmbeddedCheckoutInterface extends
-    OnsitePaymentGatewayInterface,
-    SupportsAuthorizationsInterface,
-    SupportsRefundsInterface {
-
-}
+interface CustomCheckoutInterface extends
+  OnsitePaymentGatewayInterface,
+  SupportsAuthorizationsInterface,
+  SupportsRefundsInterface { }
