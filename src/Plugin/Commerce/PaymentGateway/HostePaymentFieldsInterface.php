@@ -9,7 +9,7 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterf
 /**
  * Provides the interface for the Hosted Payment Fields payment gateway.
  */
-interface CustomCheckoutInterface extends
+interface HostePaymentFieldsInterface extends
   OnsitePaymentGatewayInterface,
   SupportsAuthorizationsInterface,
   SupportsRefundsInterface { }

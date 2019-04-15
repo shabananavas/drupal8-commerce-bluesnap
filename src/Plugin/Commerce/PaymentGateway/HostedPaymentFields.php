@@ -35,7 +35,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   js_library = "commerce_bluesnap/form",
  * )
  */
-class CustomCheckout extends OnsitePaymentGatewayBase implements CustomCheckoutInterface {
+class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePaymentFieldsInterface {
 
   /**
    * BlueSnap test API URL.
