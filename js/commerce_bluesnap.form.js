@@ -62,7 +62,6 @@
                 }
                 // If we're successful, make the actual submit to the server.
                 else {
-                  console.log(callback);
                   // Submit the form.
                   $form.get(0).submit();
                 }
