@@ -2,9 +2,16 @@
 
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
+use Drupal\commerce\InlineFormManager;
+use Drupal\commerce_bluesnap\ApiService;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
+
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * The BlueSnap PaymentMethodAddForm.
@@ -12,6 +19,46 @@ use Drupal\Core\Form\FormStateInterface;
  * @package Drupal\commerce_bluesnap\PluginForm\Bluesnap
  */
 class PaymentMethodAddForm extends BasePaymentMethodAddForm {
+
+  /**
+   * The Bluesnap API helper service.
+   *
+   * @var \Drupal\commerce_bluesnap\ApiService
+   */
+  protected $apiService;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct(
+    InlineFormManager $inline_form_manager,
+    RouteMatchInterface $route_match,
+    EntityTypeManagerInterface $entity_type_manager,
+    LoggerInterface $logger,
+    ApiService $api_service
+  ) {
+    parent::__construct(
+      $inline_form_manager,
+      $route_match,
+      $entity_type_manager,
+      $logger
+    );
+
+    $this->apiService = $api_service;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('plugin.manager.commerce_inline_form'),
+      $container->get('current_route_match'),
+      $container->get('entity_type.manager'),
+      $container->get('logger.factory')->get('commerce_payment'),
+      $container->get('commerce_bluesnap.api_service')
+    );
+  }
 
   /**
    * {@inheritdoc}
@@ -22,12 +69,15 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
 
     $element['#attached']['library'][] = 'commerce_bluesnap/form';
 
-    // Populated by the JS library.
+    // The BlueSnap unique Hosted Payment Fields Token.
+    // First, initialize BlueSnap.
+    $this->apiService->initializeBlueSnap($this->entity->getPaymentGateway()->getPlugin());
     $element['bluesnap_token'] = [
       '#type' => 'hidden',
       '#attributes' => [
-        'id' => 'bluesnap_token'
-      ]
+        'id' => 'bluesnap-token',
+      ],
+      '#value' => $this->apiService->getHostedPaymentFieldsToken(),
     ];
 
     $element['card_number'] = [
@@ -43,7 +93,7 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#title' => t('Expiration date'),
       '#required' => TRUE,
       '#validated' => TRUE,
-      '#attributes' => '<div class="form-control" id="exp-date" data-bluesnap="exp"></div>',
+      '#markup' => '<div class="form-control" id="exp-date" data-bluesnap="exp"></div>',
     ];
 
     $element['security_code'] = [
@@ -83,12 +133,14 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
+
     // Add the bluesnap attribute to the postal code field.
     $form['billing_information']['address']['widget'][0]['address_line1']['#attributes']['data-bluesnap'] = 'address_line1';
     $form['billing_information']['address']['widget'][0]['address_line2']['#attributes']['data-bluesnap'] = 'address_line2';
     $form['billing_information']['address']['widget'][0]['locality']['#attributes']['data-bluesnap'] = 'address_city';
     $form['billing_information']['address']['widget'][0]['postal_code']['#attributes']['data-bluesnap'] = 'address_zip';
     $form['billing_information']['address']['widget'][0]['country_code']['#attributes']['data-bluesnap'] = 'address_country';
+
     return $form;
   }
 

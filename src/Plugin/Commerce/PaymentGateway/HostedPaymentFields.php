@@ -115,10 +115,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    */
   public function defaultConfiguration() {
     return [
-        'merchant_id' => '',
-        'payments_api_key' => '',
-        'profiles_api_key' => '',
-      ] + parent::defaultConfiguration();
+      'username' => '',
+      'password' => '',
+    ] + parent::defaultConfiguration();
   }
 
   /**
@@ -190,7 +189,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    * {@inheritdoc}
    */
   public function createPaymentMethod(PaymentMethodInterface $payment_method, array $payment_details) {
-    // TODO: Implement createPaymentMethod() method.
+    ksm($payment_method);
+    ksm($payment_details);
+    exit;
   }
 
   /**
@@ -201,35 +202,24 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
   }
 
   /**
+   * Returns the environment for BlueSnap.
+   */
+  public function getEnvironment() {
+    return $this->getMode() === 'live' ? 'production' : 'sandbox';
+  }
+
+  /**
    * Returns the username.
    */
-  protected function getUsername() {
+  public function getUsername() {
     return $this->configuration['username'] ?: '';
   }
 
   /**
    * Returns the password.
    */
-  protected function getPassword() {
+  public function getPassword() {
     return $this->configuration['password'] ?: '';
-  }
-
-  /**
-   * Merge default BlueSnap parameters in with the provided ones.
-   *
-   * @param array $parameters
-   *   The parameters for the transaction.
-   *
-   * @return array
-   *   The new parameters.
-   */
-  protected function getParameters(array $parameters = []) {
-    $defaultParameters = [
-      'username' => $this->getUsername(),
-      'password' => $this->getPassword(),
-    ];
-
-    return $parameters + $defaultParameters;
   }
 
 }
