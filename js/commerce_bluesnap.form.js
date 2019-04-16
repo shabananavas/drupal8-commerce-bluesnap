@@ -30,7 +30,7 @@
         // Get the form.
         var $form = $(this).closest('form');
         // Get the Hosted Payment Fields token.
-        var $hostedPaymentFieldsToken = $('#bluesnap-token', $form).val();
+        var $hostedPaymentFieldsToken = drupalSettings.bluesnap_token;
 
         /**
          * Takes token and bsObj as inputs and initiates Hosted Payment Fields.
@@ -62,7 +62,11 @@
                 }
                 // If we're successful, make the actual submit to the server.
                 else {
-                  // Submit the form.
+                  // Insert the token ID into the form so it gets submitted to
+                  // the server.
+                  $('#bluesnap-token', $form).val($hostedPaymentFieldsToken);
+
+                  // Finally, submit the form.
                   $form.get(0).submit();
                 }
               });

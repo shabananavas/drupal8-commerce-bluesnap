@@ -64,20 +64,28 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
    * {@inheritdoc}
    */
   public function buildCreditCardForm(array $element, FormStateInterface $form_state) {
+    // The BlueSnap unique Hosted Payment Fields Token that will be sent in the
+    // drupalSettings to the JS.
+    // First, initialize BlueSnap.
+    if (empty($form_state->getValue('bluesnap_token'))) {
+      $this->apiService->initializeBlueSnap($this->entity->getPaymentGateway()->getPlugin());
+      $bluesnap_token = $this->apiService->getHostedPaymentFieldsToken();
+    }
+    else {
+      $bluesnap_token = $form_state->getValue('bluesnap_token');
+    }
+
     // Alter the form with Bluesnap specific needs.
     $element['#attributes']['class'][] = 'bluesnap-form';
-
     $element['#attached']['library'][] = 'commerce_bluesnap/form';
+    $element['#attached']['drupalSettings']['bluesnap_token'] = $bluesnap_token;
 
-    // The BlueSnap unique Hosted Payment Fields Token.
-    // First, initialize BlueSnap.
-    $this->apiService->initializeBlueSnap($this->entity->getPaymentGateway()->getPlugin());
+    // Hidden fields which will be populated by the js.
     $element['bluesnap_token'] = [
       '#type' => 'hidden',
       '#attributes' => [
         'id' => 'bluesnap-token',
       ],
-      '#value' => $this->apiService->getHostedPaymentFieldsToken(),
     ];
 
     $element['card_number'] = [

@@ -3,8 +3,10 @@
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\ApiService;
+use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+use Drupal\commerce_payment\Exception\HardDeclineException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
@@ -15,6 +17,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 
+use stdClass;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -30,7 +33,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   },
  *   payment_method_types = {"credit_card"},
  *   credit_card_types = {
- *     "amex", "mastercard", "discover", "visa",
+ *     "amex", "dinersclub", "discover", "jcb", "mastercard", "visa",
  *   },
  *   js_library = "commerce_bluesnap/form",
  * )
@@ -161,14 +164,61 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    * {@inheritdoc}
    */
   public function createPayment(PaymentInterface $payment, $capture = TRUE) {
-    // TODO: Implement createPayment() method.
+    $this->assertPaymentState($payment, ['new']);
+    $payment_method = $payment->getPaymentMethod();
+    $this->assertPaymentMethod($payment_method);
+
+    $amount = $payment->getAmount();
+    $transaction_data = [
+      'currency' => $amount->getCurrencyCode(),
+      'amount' => $this->rounder->round($amount)->getNumber(),
+      'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
+    ];
+
+    $owner = $payment_method->getOwner();
+    if ($owner && $owner->isAuthenticated()) {
+      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+      $transaction_data['creditCard'] = [
+        'cardLastFourDigits' => $payment_method->card_number->value,
+        'cardType' => $payment_method->card_type->value,
+      ];
+    }
+    else {
+      $transaction_data['pfToken'] = $payment_method->getRemoteId();
+    }
+
+    $this->apiService->initializeBlueSnap($this);
+    $result = $this->apiService->createTransaction($transaction_data);
+
+    $next_state = $capture ? 'completed' : 'authorization';
+    $payment->setState($next_state);
+    $payment->setRemoteId($result->id);
+    $payment->save();
   }
 
   /**
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
-    // TODO: Implement capturePayment() method.
+    $this->assertPaymentState($payment, ['authorization']);
+    // If not specified, capture the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+
+    $transaction_data = [
+      'currency' => $amount->getCurrencyCode(),
+      'amount' => $amount,
+      'cardTransactionType' => 'CAPTURE',
+      'transactionId' => $payment->getRemoteId(),
+    ];
+
+    // Capture the payment.
+    $this->apiService->initializeBlueSnap($this);
+    $result = $this->apiService->createTransaction($transaction_data);
+
+    $payment->setState('completed');
+    $payment->setAmount($amount);
+    $payment->save();
   }
 
   /**
@@ -189,9 +239,37 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    * {@inheritdoc}
    */
   public function createPaymentMethod(PaymentMethodInterface $payment_method, array $payment_details) {
-    ksm($payment_method);
-    ksm($payment_details);
-    exit;
+    // The expected token must always be present.
+    $required_keys = [
+      'bluesnap_token',
+    ];
+    foreach ($required_keys as $required_key) {
+      if (empty($payment_details[$required_key])) {
+        throw new \InvalidArgumentException(sprintf(
+          '$payment_details must contain the %s key.',
+          $required_key
+        ));
+      }
+    }
+
+    // Initialize BlueSnap and create the payment method on BlueSnap.
+    $this->apiService->initializeBlueSnap($this);
+    $remote_payment_method = $this->doCreatePaymentMethod($payment_method, $payment_details);
+
+    // Save the remote details in the payment method.
+    if ($remote_payment_method) {
+      $card = $remote_payment_method->paymentSources->creditCardInfo[0];
+      $payment_method->card_type = $this->mapCreditCardType($card->creditCard->cardType);
+      $payment_method->card_number = $card->creditCard->cardLastFourDigits;
+      $expiry_month = $card->creditCard->expirationMonth;
+      $expiry_year = $card->creditCard->expirationYear;
+      $payment_method->card_exp_month = $expiry_month;
+      $payment_method->card_exp_year = $expiry_year;
+      $expires = CreditCard::calculateExpirationTimestamp($expiry_month, $expiry_year);
+      $payment_method->setExpiresTime($expires);
+    }
+    $payment_method->setRemoteId($payment_details['bluesnap_token']);
+    $payment_method->save();
   }
 
   /**
@@ -220,6 +298,148 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    */
   public function getPassword() {
     return $this->configuration['password'] ?: '';
+  }
+
+  /**
+   * Maps the BlueSnap credit card type to a Commerce credit card type.
+   *
+   * @param string $card_type
+   *   The BlueSnap credit card type.
+   *
+   * @return string
+   *   The Commerce credit card type.
+   */
+  protected function mapCreditCardType($card_type) {
+    // https://developers.bluesnap.com/docs/credit-card-codes.
+    $map = [
+      'AMEX' => 'amex',
+      'DINERS' => 'dinersclub',
+      'DISCOVER' => 'discover',
+      'JCB' => 'jcb',
+      'MASTERCARD' => 'mastercard',
+      'VISA' => 'visa',
+    ];
+    if (!isset($map[$card_type])) {
+      throw new HardDeclineException(sprintf('Unsupported credit card type "%s".', $card_type));
+    }
+
+    return $map[$card_type];
+  }
+
+  /**
+   * Creates the payment method on the BlueSnap payment gateway.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The details of the entered credit card.
+   *
+   * @throws \Exception
+   */
+  protected function doCreatePaymentMethod(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  ) {
+    $owner = $payment_method->getOwner();
+
+    // Authenticated user.
+    $customer_id = NULL;
+    if ($owner && $owner->isAuthenticated()) {
+      $customer_id = $this->getRemoteCustomerId($owner);
+
+      return $this->doCreatePaymentMethodForAuthenticatedUser(
+        $payment_method,
+        $payment_details,
+        $customer_id
+      );
+    }
+
+    // Anonymous user.
+    return [];
+  }
+
+  /**
+   * Creates the payment method for an authenticated user.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   * @param string $customer_id
+   *   The BlueSnap customer ID.
+   *
+   * @return array
+   *   The details of the entered credit card.
+   *
+   * @throws \Exception
+   */
+  protected function doCreatePaymentMethodForAuthenticatedUser(
+    PaymentMethodInterface $payment_method,
+    array $payment_details,
+    $customer_id = NULL
+  ) {
+    $owner = $payment_method->getOwner();
+    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
+    $address = $payment_method->getBillingProfile()->get('address')->first();
+
+    // If this is an existing BlueSnap customer, use the token to create the new
+    // card.
+    if ($customer_id) {
+      $vaulted_shopper = new stdClass();
+      $vaulted_shopper->paymentSources->creditCardInfo = [
+        ['pfToken' => $payment_details['bluesnap_token']],
+      ];
+      return $this->apiService->updateVaultedShopper($customer_id, $vaulted_shopper);
+    }
+    // New customer.
+    else {
+      $vaulted_shopper = new stdClass();
+      $vaulted_shopper->paymentSources->creditCardInfo = [
+        ['pfToken' => $payment_details['bluesnap_token']],
+      ];
+      $vaulted_shopper->firstName = $address->getGivenName();
+      $vaulted_shopper->lastName = $address->getFamilyName();
+      $vaulted_shopper->email = $owner->getEmail();
+      $vaulted_shopper->address1 = $address->getAddressLine1();
+      $vaulted_shopper->address2 = $address->getAddressLine2();
+      $vaulted_shopper->city = $address->getLocality();
+      $vaulted_shopper->state = $address->getAdministrativeArea();
+      $vaulted_shopper->zip = $address->getPostalCode();
+      $vaulted_shopper->country = $address->getCountryCode();
+      $remote_payment_method = $this->apiService->createVaultedShopper($vaulted_shopper);
+
+      // Save the new customer ID.
+      $this->setRemoteCustomerId($owner, $remote_payment_method->id);
+      $owner->save();
+
+      return $remote_payment_method;
+    }
+  }
+
+  /**
+   * Creates the payment method for an anonymous user.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The details of the entered credit card.
+   *
+   * @throws \Exception
+   */
+  protected function doCreatePaymentMethodForAnonymousUser(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  ) {
+    $payment_method->setRemoteId($payment_details['bluesnap_token']);
+    $payment_method->save();
+
+    return [];
   }
 
 }
