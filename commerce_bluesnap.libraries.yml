@@ -9,9 +9,6 @@ bluesnap:
 
 form:
   version: VERSION
-  css:
-    theme:
-      css/commerce_bluesnap.form.css: {}
   js:
     js/commerce_bluesnap.form.js: {}
   dependencies:

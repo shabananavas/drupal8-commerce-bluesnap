@@ -79,7 +79,7 @@
         });
 
         /**
-         * Defining bsObj: object.
+         * Define the bluesnapObject.
          *
          * Stores Hosted Payment Fields event handlers, styling, placeholder
          * text, etc.
