@@ -23,6 +23,6 @@
   },
   "require": {
     "drupal/commerce": "~2.0",
-    "ventepos/bluesnap-php": "^0.3"
+    "shabananavas/php-bluesnap-sdk": "dev-develop"
   }
 }
