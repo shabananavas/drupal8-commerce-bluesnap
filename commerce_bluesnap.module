@@ -21,8 +21,8 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<ul>';
       $output .= '<li>' . t(
           '<strong>Credit Card Payments Integration</strong>
-          - On-site payment gateway. Serves payment input fields from Bluesnap’s
-          domain, minimizing the scope of PCI compliance.
+          - Hosted Payment Fields payment gateway. Serves payment input fields
+          from Bluesnap’s domain, minimizing the scope of PCI compliance.
           <br> For more info, see the README.txt file.
           Configure <a href=":configuration_link">here</a>.', [
             ':configuration_link' => Url::fromUri(
