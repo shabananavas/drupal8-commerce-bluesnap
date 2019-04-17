@@ -1,0 +1,3 @@
+services:
+  commerce_bluesnap.api_service:
+    class: Drupal\commerce_bluesnap\ApiService
