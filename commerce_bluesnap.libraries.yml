@@ -1,0 +1,20 @@
+bluesnap:
+  remote: https://ws.bluesnap.com/source/web-sdk/bluesnap.js
+  version: 1
+  license:
+    name: MIT
+    gpl-compatible: true
+  js:
+    https://ws.bluesnap.com/source/web-sdk/bluesnap.js: { type: external}
+
+form:
+  version: VERSION
+  js:
+    js/commerce_bluesnap.form.js: {}
+  dependencies:
+    - classy/messages
+    - core/jquery
+    - core/drupal
+    - core/drupalSettings
+    - core/jquery.once
+    - commerce_bluesnap/bluesnap
