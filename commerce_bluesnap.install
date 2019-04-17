@@ -14,13 +14,13 @@ function commerce_bluesnap_requirements($phase) {
   }
 
   // All good if the library exists.
-  if (class_exists('\tdanielcox\Bluesnap')) {
+  if (class_exists('\Bluesnap')) {
     return [];
   }
 
   return [
     'commerce_bluesnap_library' => [
-      'description' => t('Commerce BlueSnap requires the ventepos/bluesnap-php library.'),
+      'description' => t('Commerce BlueSnap requires the shabananavas/php-bluesnap-sdk library.'),
       'severity' => REQUIREMENT_ERROR,
     ]
   ];
