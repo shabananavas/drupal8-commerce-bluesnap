@@ -65,6 +65,10 @@
                   // Insert the token ID into the form so it gets submitted to
                   // the server.
                   $('#bluesnap-token', $form).val($hostedPaymentFieldsToken);
+                  // Insert the card details into the form as well.
+                  $('#bluesnap-cc-type', $form).val(callback.cardData.ccType);
+                  $('#bluesnap-cc-last-4', $form).val(callback.cardData.last4Digits);
+                  $('#bluesnap-cc-expiry', $form).val(callback.cardData.exp);
 
                   // Finally, submit the form.
                   $form.get(0).submit();

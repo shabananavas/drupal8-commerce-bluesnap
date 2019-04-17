@@ -7,6 +7,8 @@ use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
+use Drupal\commerce_payment\Exception\InvalidRequestException;
+use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
@@ -17,7 +19,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 
-use stdClass;
+use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -39,16 +41,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * )
  */
 class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePaymentFieldsInterface {
-
-  /**
-   * BlueSnap test API URL.
-   */
-  const BLUESNAP_API_TEST_URL = 'https://sandbox.bluesnap.com';
-
-  /**
-   * BlueSnap production API URL.
-   */
-  const BLUESNAP_API_URL = 'https://ws.bluesnap.com';
 
   /**
    * The rounder.
@@ -169,12 +161,17 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     $this->assertPaymentMethod($payment_method);
 
     $amount = $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+
+    // Create the payment data.
     $transaction_data = [
       'currency' => $amount->getCurrencyCode(),
-      'amount' => $this->rounder->round($amount)->getNumber(),
+      'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
+      'merchantTransactionId' => $payment->getOrderId(),
     ];
-
+    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
+    // the payment data.
     $owner = $payment_method->getOwner();
     if ($owner && $owner->isAuthenticated()) {
       $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
@@ -183,12 +180,25 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
         'cardType' => $payment_method->card_type->value,
       ];
     }
+    // If this is an anonymous user, use the BlueSnap token in the payment data.
     else {
       $transaction_data['pfToken'] = $payment_method->getRemoteId();
+      /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
+      $address = $payment_method->getBillingProfile()->get('address')->first();
+      // First and last name are required.
+      $transaction_data['cardHolderInfo'] = [
+        'firstName' => $address->getGivenName(),
+        'lastName' => $address->getFamilyName(),
+      ];
     }
 
-    $this->apiService->initializeBlueSnap($this);
-    $result = $this->apiService->createTransaction($transaction_data);
+    // Create the payment transaction on BlueSnap.
+    try {
+      $result = $this->apiService->createTransaction($this, $transaction_data);
+    }
+    catch (Exception $e) {
+      throw new HardDeclineException('Could not charge the payment method. Message: ' . $e->getMessage());
+    }
 
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
@@ -205,16 +215,20 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     $amount = $amount ?: $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
+    // Capture the payment transaction on BlueSnap.
+    $remote_id = $payment->getRemoteId();
     $transaction_data = [
       'currency' => $amount->getCurrencyCode(),
-      'amount' => $amount,
+      'amount' => $amount->getNumber(),
       'cardTransactionType' => 'CAPTURE',
-      'transactionId' => $payment->getRemoteId(),
+      'transactionId' => $remote_id,
     ];
-
-    // Capture the payment.
-    $this->apiService->initializeBlueSnap($this);
-    $result = $this->apiService->createTransaction($transaction_data);
+    try {
+      $result = $this->apiService->updateTransaction($this, $remote_id, $transaction_data);
+    }
+    catch (Exception $e) {
+      throw new PaymentGatewayException('Could not capture the payment. Message: ' . $e->getMessage());
+    }
 
     $payment->setState('completed');
     $payment->setAmount($amount);
@@ -225,21 +239,64 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    * {@inheritdoc}
    */
   public function voidPayment(PaymentInterface $payment) {
-    // TODO: Implement voidPayment() method.
+    $this->assertPaymentState($payment, ['authorization']);
+
+    // Void the payment transaction on BlueSnap.
+    $remote_id = $payment->getRemoteId();
+    $transaction_data = [
+      'cardTransactionType' => 'AUTH_REVERSAL',
+      'transactionId' => $remote_id,
+    ];
+    try {
+      $result = $this->apiService->updateTransaction($this, $remote_id, $transaction_data);
+    }
+    catch (Exception $e) {
+      throw new PaymentGatewayException('Could not void the payment. Message: ' . $e->getMessage());
+    }
+
+    $payment->setState('authorization_voided');
+    $payment->save();
   }
 
   /**
    * {@inheritdoc}
    */
   public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
-    // TODO: Implement refundPayment() method.
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+    $this->assertRefundAmount($payment, $amount);
+
+    // Refund the payment transaction on BlueSnap.
+    $transaction_data = [
+      'amount' => $amount->getNumber(),
+    ];
+    try {
+      $result = $this->apiService->refundTransaction($this, $payment->getRemoteId(), $transaction_data);
+    }
+    catch (Exception $e) {
+      throw new InvalidRequestException('Could not refund the payment. Message: ' . $e->getMessage());
+    }
+
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->setState('partially_refunded');
+    }
+    else {
+      $payment->setState('refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
   }
 
   /**
    * {@inheritdoc}
    */
   public function createPaymentMethod(PaymentMethodInterface $payment_method, array $payment_details) {
-    // The expected token must always be present.
+    // The expected token and card details must always be present.
     $required_keys = [
       'bluesnap_token',
     ];
@@ -252,22 +309,35 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       }
     }
 
-    // Initialize BlueSnap and create the payment method on BlueSnap.
-    $this->apiService->initializeBlueSnap($this);
+    // Create the payment method on BlueSnap.
     $remote_payment_method = $this->doCreatePaymentMethod($payment_method, $payment_details);
 
     // Save the remote details in the payment method.
+    // For auth users, get the card details from the remote payment method.
     if ($remote_payment_method) {
-      $card = $remote_payment_method->paymentSources->creditCardInfo[0];
-      $payment_method->card_type = $this->mapCreditCardType($card->creditCard->cardType);
-      $payment_method->card_number = $card->creditCard->cardLastFourDigits;
-      $expiry_month = $card->creditCard->expirationMonth;
-      $expiry_year = $card->creditCard->expirationYear;
-      $payment_method->card_exp_month = $expiry_month;
-      $payment_method->card_exp_year = $expiry_year;
-      $expires = CreditCard::calculateExpirationTimestamp($expiry_month, $expiry_year);
-      $payment_method->setExpiresTime($expires);
+      // The card we added should be the last in the array.
+      $card = end($remote_payment_method->paymentSources->creditCardInfo);
+      $card_type = $this->mapCreditCardType($card->creditCard->cardType);
+      $card_number = $card->creditCard->cardLastFourDigits;
+      $card_expiry_month = $card->creditCard->expirationMonth;
+      $card_expiry_year = $card->creditCard->expirationYear;
     }
+    // For anon users, get the card details from the payment details.
+    else {
+      $card_type = $this->mapCreditCardType($payment_details['bluesnap_cc_type']);
+      $card_number = $payment_details['bluesnap_cc_last_4'];
+      $card_expiry = explode('/', $payment_details['bluesnap_cc_expiry']);
+      $card_expiry_month = $card_expiry[0];
+      $card_expiry_year = $card_expiry[1];
+    }
+
+    // Save the payment method.
+    $payment_method->card_type = $card_type;
+    $payment_method->card_number = $card_number;
+    $payment_method->card_exp_month = $card_expiry_month;
+    $payment_method->card_exp_year = $card_expiry_year;
+    $expires = CreditCard::calculateExpirationTimestamp($card_expiry_month, $card_expiry_year);
+    $payment_method->setExpiresTime($expires);
     $payment_method->setRemoteId($payment_details['bluesnap_token']);
     $payment_method->save();
   }
@@ -276,7 +346,31 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
    * {@inheritdoc}
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
-    // TODO: Implement deletePaymentMethod() method.
+    $owner = $payment_method->getOwner();
+    // If there's no owner we won't be able to delete the remote payment method
+    // as we won't have a remote profile. Just delete the payment method locally
+    // in that case.
+    if (!$owner) {
+      $payment_method->delete();
+      return;
+    }
+
+    // Delete the card from the vaulted shopper on BlueSnap.
+    $customer_id = $this->getRemoteCustomerId($owner);
+    $data = [
+      'cardLastFourDigits' => $payment_method->card_number->value,
+      'expirationMonth' => $payment_method->card_exp_month->value,
+      'expirationYear' => $payment_method->card_exp_year->value,
+    ];
+    try {
+      $result = $this->apiService->deleteCardFromVaultedShopper($this, $customer_id, $data);
+    }
+    catch (Exception $e) {
+      throw new InvalidRequestException('Could not delete the payment method. Message: ' . $e->getMessage());
+    }
+
+    // Delete the local entity.
+    $payment_method->delete();
   }
 
   /**
@@ -384,62 +478,69 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     $owner = $payment_method->getOwner();
     /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
     $address = $payment_method->getBillingProfile()->get('address')->first();
+    $billing_info = [
+      'firstName' => $address->getGivenName(),
+      'lastName' => $address->getFamilyName(),
+      'address1' => $address->getAddressLine1(),
+      'address2' => $address->getAddressLine2(),
+      'city' => $address->getLocality(),
+      'state' => $address->getAdministrativeArea(),
+      'zip' => $address->getPostalCode(),
+      'country' => $address->getCountryCode(),
+    ];
 
     // If this is an existing BlueSnap customer, use the token to create the new
     // card.
     if ($customer_id) {
-      $vaulted_shopper = new stdClass();
-      $vaulted_shopper->paymentSources->creditCardInfo = [
-        ['pfToken' => $payment_details['bluesnap_token']],
+      $credit_card_data = [
+        'billingContactInfo' => $billing_info,
+        'pfToken' => $payment_details['bluesnap_token'],
       ];
-      return $this->apiService->updateVaultedShopper($customer_id, $vaulted_shopper);
+
+      // Add the card to the existing vaulted shopper.
+      try {
+        return $this->apiService->addCardToVaultedShopper($this, $customer_id, $credit_card_data);
+      }
+      catch (Exception $e) {
+        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
+      }
     }
-    // New customer.
+    // If it's a new customer, create a new vaulted shopper on BlueSnap.
     else {
-      $vaulted_shopper = new stdClass();
-      $vaulted_shopper->paymentSources->creditCardInfo = [
-        ['pfToken' => $payment_details['bluesnap_token']],
+      $data = [
+        'firstName' => $address->getGivenName(),
+        'lastName' => $address->getFamilyName(),
+        'email' => $owner->getEmail(),
+        'address1' => $address->getAddressLine1(),
+        'address2' => $address->getAddressLine2(),
+        'city' => $address->getLocality(),
+        'state' => $address->getAdministrativeArea(),
+        'zip' => $address->getPostalCode(),
+        'country' => $address->getCountryCode(),
+        'paymentSources' => [
+          'creditCardInfo' => [
+            [
+              'pfToken' => $payment_details['bluesnap_token'],
+              'billingContactInfo' => $billing_info,
+            ],
+          ],
+        ],
       ];
-      $vaulted_shopper->firstName = $address->getGivenName();
-      $vaulted_shopper->lastName = $address->getFamilyName();
-      $vaulted_shopper->email = $owner->getEmail();
-      $vaulted_shopper->address1 = $address->getAddressLine1();
-      $vaulted_shopper->address2 = $address->getAddressLine2();
-      $vaulted_shopper->city = $address->getLocality();
-      $vaulted_shopper->state = $address->getAdministrativeArea();
-      $vaulted_shopper->zip = $address->getPostalCode();
-      $vaulted_shopper->country = $address->getCountryCode();
-      $remote_payment_method = $this->apiService->createVaultedShopper($vaulted_shopper);
 
-      // Save the new customer ID.
-      $this->setRemoteCustomerId($owner, $remote_payment_method->id);
-      $owner->save();
+      // Create a new vaulted shopper.
+      try {
+        $remote_payment_method = $this->apiService->createVaultedShopper($this, $data);
 
-      return $remote_payment_method;
+        // Save the new customer ID.
+        $this->setRemoteCustomerId($owner, $remote_payment_method->id);
+        $owner->save();
+
+        return $remote_payment_method;
+      }
+      catch (Exception $e) {
+        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
+      }
     }
-  }
-
-  /**
-   * Creates the payment method for an anonymous user.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   *
-   * @return array
-   *   The details of the entered credit card.
-   *
-   * @throws \Exception
-   */
-  protected function doCreatePaymentMethodForAnonymousUser(
-    PaymentMethodInterface $payment_method,
-    array $payment_details
-  ) {
-    $payment_method->setRemoteId($payment_details['bluesnap_token']);
-    $payment_method->save();
-
-    return [];
   }
 
 }

@@ -68,8 +68,7 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     // drupalSettings to the JS.
     // First, initialize BlueSnap.
     if (empty($form_state->getValue('bluesnap_token'))) {
-      $this->apiService->initializeBlueSnap($this->entity->getPaymentGateway()->getPlugin());
-      $bluesnap_token = $this->apiService->getHostedPaymentFieldsToken();
+      $bluesnap_token = $this->apiService->getHostedPaymentFieldsToken($this->entity->getPaymentGateway()->getPlugin());
     }
     else {
       $bluesnap_token = $form_state->getValue('bluesnap_token');
@@ -87,7 +86,29 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
         'id' => 'bluesnap-token',
       ],
     ];
+    // Hidden fields which will be populated by the js once a card is
+    // successfully submitted to BlueSnap. This will be used for the card
+    // details for Anonymous users when creating a payment method.
+    $element['bluesnap_cc_type'] = [
+      '#type' => 'hidden',
+      '#attributes' => [
+        'id' => 'bluesnap-cc-type',
+      ],
+    ];
+    $element['bluesnap_cc_last_4'] = [
+      '#type' => 'hidden',
+      '#attributes' => [
+        'id' => 'bluesnap-cc-last-4',
+      ],
+    ];
+    $element['bluesnap_cc_expiry'] = [
+      '#type' => 'hidden',
+      '#attributes' => [
+        'id' => 'bluesnap-cc-expiry',
+      ],
+    ];
 
+    // The credit card fields necessary for BlueSnap.
     $element['card_number'] = [
       '#type' => 'item',
       '#title' => t('Card number'),
