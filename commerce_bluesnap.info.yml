@@ -1,6 +1,6 @@
 name: Commerce BlueSnap
 type: module
-description: 'Provides Drupal Commerce integration with the BlueSnap Payment Gateway.'
+description: 'Provides Drupal Commerce integration with the BlueSnap Payment Platform.'
 package: Commerce (contrib)
 core: 8.x
 dependencies:
