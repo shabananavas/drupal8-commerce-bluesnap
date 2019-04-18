@@ -16,7 +16,7 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
     case 'help.page.commerce_bluesnap':
       $output = '';
       $output .= '<h2>' . t('About') . '</h2>';
-      $output .= '<p>' . t('Provides Drupal Commerce integration with the BlueSnap Payment Gateway.') . '</p>';
+      $output .= '<p>' . t('Provides Drupal Commerce integration with the BlueSnap Payment Platform.') . '</p>';
       $output .= '<h3>' . t('Features') . '</h3>';
       $output .= '<ul>';
       $output .= '<li>' . t(

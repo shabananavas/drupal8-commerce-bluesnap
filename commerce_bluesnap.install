@@ -20,7 +20,9 @@ function commerce_bluesnap_requirements($phase) {
 
   return [
     'commerce_bluesnap_library' => [
-      'description' => t('Commerce BlueSnap requires the shabananavas/php-bluesnap-sdk library.'),
+      'description' => t('Commerce BlueSnap requires the <a href=":library_link">shabananavas/php-bluesnap-sdk</a> library.', [
+        ':library_link' => 'https://github.com/shabananavas/php-bluesnap-sdk',
+      ]),
       'severity' => REQUIREMENT_ERROR,
     ]
   ];
