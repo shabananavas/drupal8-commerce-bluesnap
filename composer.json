@@ -1,7 +1,7 @@
 {
   "name": "drupal/commerce_bluesnap",
   "type": "drupal-module",
-  "description": "Provides Drupal Commerce integration with the BlueSnap Payment Gateway.",
+  "description": "Provides Drupal Commerce integration with the BlueSnap Payment Platform.",
   "keywords": ["Drupal"],
   "homepage": "https://www.drupal.org/project/commerce_bluesnap",
   "license": "GPL-2.0+",
@@ -19,10 +19,10 @@
   ],
   "support": {
     "issues": "https://www.drupal.org/project/issues/commerce_bluesnap",
-    "source": "http://cgit.drupalcode.org/commerce_bluesnap"
+    "source": "https://git.drupalcode.org/project/commerce_bluesnap.git"
   },
   "require": {
     "drupal/commerce": "~2.0",
-    "shabananavas/php-bluesnap-sdk": "dev-develop"
+    "shabananavas/php-bluesnap-sdk": "dev-master"
   }
 }
