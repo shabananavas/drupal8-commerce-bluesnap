@@ -7,10 +7,10 @@ bluesnap:
   js:
     https://ws.bluesnap.com/source/web-sdk/bluesnap.js: { type: external}
 
-form:
+hosted_payment_fields_form:
   version: VERSION
   js:
-    js/commerce_bluesnap.form.js: {}
+    js/commerce_bluesnap.hosted_payment_fields.form.js: {}
   dependencies:
     - classy/messages
     - core/jquery
