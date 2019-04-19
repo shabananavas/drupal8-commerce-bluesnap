@@ -20,17 +20,17 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<h3>' . t('Features') . '</h3>';
       $output .= '<ul>';
       $output .= '<li>' . t(
-          '<strong>Credit Card Payments Integration</strong>
-          - Hosted Payment Fields payment gateway. Serves payment input fields
-          from Bluesnap’s domain, minimizing the scope of PCI compliance.
-          <br> For more info, see the README.txt file.
-          Configure <a href=":configuration_link">here</a>.', [
+        '<strong>Credit Card Payments Integration</strong>
+        - Hosted Payment Fields payment gateway. Serves payment input fields
+        from Bluesnap’s domain, minimizing the scope of PCI compliance.
+        <br> For more info, see the README.txt file.
+        Configure <a href=":configuration_link">here</a>.',
+          [
             ':configuration_link' => Url::fromUri(
               'internal:/admin/commerce/config/payment-gateways/manage/bluesnap'
             )->toString()
           ]
-        ) .
-        '</li>';
+        ) . '</li>';
       $output .= '</ul>';
       return $output;
   }
