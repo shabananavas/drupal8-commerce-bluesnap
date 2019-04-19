@@ -31,7 +31,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   display_label = "Bluesnap",
  *   forms = {
  *     "add-payment-method" =
- *   "Drupal\commerce_bluesnap\PluginForm\Bluesnap\PaymentMethodAddForm",
+ *   "Drupal\commerce_bluesnap\PluginForm\Bluesnap\HostedPaymentFieldsPaymentMethodAddForm",
  *   },
  *   payment_method_types = {"credit_card"},
  *   credit_card_types = {
