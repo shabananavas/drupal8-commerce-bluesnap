@@ -80,8 +80,12 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
 
     // Alter the form with Bluesnap specific needs.
     $element['#attributes']['class'][] = 'bluesnap-form';
-    $element['#attached']['library'][] = 'commerce_bluesnap/form';
-    $element['#attached']['drupalSettings']['bluesnap_token'] = $bluesnap_token;
+    $element['#attached']['library'][] = 'commerce_bluesnap/hosted_payment_fields_form';
+    $element['#attached']['drupalSettings']['commerceBluesnap'] = [
+      'hostedPaymentFields' => [
+        'token' => $bluesnap_token,
+      ],
+    ];
 
     // Hidden fields which will be populated by the js.
     $this->hiddenFields($element);
