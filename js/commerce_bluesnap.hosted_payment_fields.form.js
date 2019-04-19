@@ -1,6 +1,8 @@
 /**
  * @file
  * Javascript to submit card details to BlueSnap in a PCI-compliant way.
+ *
+ * Uses the HostedPaymentFields method.
  */
 
 (function ($, Drupal, drupalSettings) {
@@ -8,20 +10,21 @@
   'use strict';
 
   /**
-   * Attaches the commerceBluesnapForm behavior.
+   * Attaches the commerceBluesnapHostedPaymentFieldsForm behavior.
    *
    * @type {Drupal~behavior}
    *
    * @prop {Drupal~behaviorAttach} attach
-   *   Attaches the commerceBluesnapForm behavior.
+   *   Attaches the commerceBluesnapHostedPaymentFieldsForm behavior.
    * @prop {Drupal~behaviorDetach} detach
-   *   Detaches the commerceBluesnapForm behavior.
+   *   Detaches the commerceBluesnapHostedPaymentFieldsForm behavior.
    *
-   * @see Drupal.commerceBluesnap
+   * @see Drupal.commerceBluesnap.hostedPaymentFields
    */
-  Drupal.behaviors.commerceBluesnapForm = {
+  Drupal.behaviors.commerceBluesnapHostedPaymentFieldsForm = {
     attach: function (context) {
       $('.bluesnap-form', context).once('bluesnap-processed').each(function () {
+
         // Initialize the card field variables.
         var isCardNumberComplete = false;
         var isCVVComplete = false;
@@ -30,53 +33,7 @@
         // Get the form.
         var $form = $(this).closest('form');
         // Get the Hosted Payment Fields token.
-        var $hostedPaymentFieldsToken = drupalSettings.bluesnap_token;
-
-        /**
-         * Takes token and bsObj as inputs and initiates Hosted Payment Fields.
-         */
-        $(document).ready(function () {
-          // Mount the payment fields from BlueSnap.
-          bluesnap.hostedPaymentFieldsCreation($hostedPaymentFieldsToken, bluesnapObject);
-
-          /**
-           * Form submit.
-           */
-          $form.on('submit', function (event) {
-            if ($('.bluesnap-form', context).length) {
-              event.preventDefault();
-
-              // Submit the card details to BlueSnap.
-              bluesnap.submitCredentials(function (callback) {
-                // On error.
-                if (null != callback.error) {
-                  var errorArray = callback.error;
-                  $(errorArray).each(function (index, error) {
-                    // Set the current field complete status to false.
-                    bluesnapSetFieldStatus(error.tagId, false);
-
-                    // Display the errors on the form.
-                    bluesnapErrorDisplay(bluesnapGetErrorText(error.errorCode));
-                    bluesnapGoToError(error.tagId);
-                  });
-                }
-                // If we're successful, make the actual submit to the server.
-                else {
-                  // Insert the token ID into the form so it gets submitted to
-                  // the server.
-                  $('#bluesnap-token', $form).val($hostedPaymentFieldsToken);
-                  // Insert the card details into the form as well.
-                  $('#bluesnap-cc-type', $form).val(callback.cardData.ccType);
-                  $('#bluesnap-cc-last-4', $form).val(callback.cardData.last4Digits);
-                  $('#bluesnap-cc-expiry', $form).val(callback.cardData.exp);
-
-                  // Finally, submit the form.
-                  $form.get(0).submit();
-                }
-              });
-            }
-          });
-        });
+        var $hostedPaymentFieldsToken = drupalSettings.commerceBluesnap.hostedPaymentFields.token;
 
         /**
          * Define the bluesnapObject.
@@ -159,6 +116,16 @@
         }
 
         /**
+         * Returns TRUE if all fields are valid on the form.
+         */
+        var bluesnapNoErrorsExist = function () {
+          return !$('.hosted-field-invalid').length
+            && isCardNumberComplete
+            && isCVVComplete
+            && isExpiryComplete;
+        };
+
+        /**
          * Sets the card field complete status to TRUE/FALSE.
          *
          * @param tagId
@@ -179,28 +146,28 @@
           }
         }
 
-        // Helper for displaying the error messages within the form.
-        var bluesnapErrorDisplay = function (error_message) {
+        /**
+         * Helper for displaying the error messages within the form.
+         *
+         * @param string error_message
+         *   The error message to display.
+         */
+        function bluesnapErrorDisplay(error_message) {
           // Display the message error in the payment form.
           $form.find('#payment-errors').html(Drupal.theme('commerceBluesnapError', error_message));
-        };
+        }
 
-        // Scroll to the error element so the user can see the problem.
-        var bluesnapGoToError = function (id) {
+        /**
+         * Scroll to the error element so the user can see the problem.
+         *
+         * @param string id
+         *   The id of the field.
+         */
+        function bluesnapGoToError(id) {
           if ($(id).length) {
             $(window).scrollTop($(id).position().top);
           }
-        };
-
-        /**
-         * Returns TRUE if all fields are valid on the form.
-         */
-        var bluesnapNoErrorsExist = function () {
-          return !$('.hosted-field-invalid').length
-            && isCardNumberComplete
-            && isCVVComplete
-            && isExpiryComplete;
-        };
+        }
 
         /**
          * Takes error code (recvd from BlueSnap) and returns associated text.
@@ -237,6 +204,50 @@
               break;
           }
         }
+
+        /**
+         * Takes token and bsObj as inputs and initiates Hosted Payment Fields.
+         */
+        // Mount the payment fields from BlueSnap.
+        bluesnap.hostedPaymentFieldsCreation($hostedPaymentFieldsToken, bluesnapObject);
+
+        /**
+         * Form submit.
+         */
+        $form.on('submit', function (event) {
+          if ($('.bluesnap-form', context).length) {
+            event.preventDefault();
+
+            // Submit the card details to BlueSnap.
+            bluesnap.submitCredentials(function (callback) {
+              // On error.
+              if (null != callback.error) {
+                var errorArray = callback.error;
+                $(errorArray).each(function (index, error) {
+                  // Set the current field complete status to false.
+                  bluesnapSetFieldStatus(error.tagId, false);
+
+                  // Display the errors on the form.
+                  bluesnapErrorDisplay(bluesnapGetErrorText(error.errorCode));
+                  bluesnapGoToError(error.tagId);
+                });
+              }
+              // If we're successful, make the actual submit to the server.
+              else {
+                // Insert the token ID into the form so it gets submitted to
+                // the server.
+                $('#bluesnap-token', $form).val($hostedPaymentFieldsToken);
+                // Insert the card details into the form as well.
+                $('#bluesnap-cc-type', $form).val(callback.cardData.ccType);
+                $('#bluesnap-cc-last-4', $form).val(callback.cardData.last4Digits);
+                $('#bluesnap-cc-expiry', $form).val(callback.cardData.exp);
+
+                // Finally, submit the form.
+                $form.get(0).submit();
+              }
+            });
+          }
+        });
 
         /**
          * @extends Drupal.theme.
