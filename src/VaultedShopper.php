@@ -162,7 +162,7 @@ class VaultedShopper {
    * @param string $customer_id
    *   The BlueSnap customer ID.
    */
-  public function vaultedShopper(
+  public function addVaultedShopperDetails(
     OnsiteBase $payment_gateway,
     PaymentMethodInterface $payment_method,
     array $payment_details,

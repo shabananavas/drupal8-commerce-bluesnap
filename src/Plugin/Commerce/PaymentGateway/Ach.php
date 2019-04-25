@@ -125,7 +125,7 @@ class Ach extends OnsiteBase implements AchInterface {
     if ($owner && $owner->isAuthenticated()) {
       $customer_id = $this->getRemoteCustomerId($owner);
       $shopper_data = $this->vaultedShopper->getEcpVaultedShopperData($payment_method, $payment_details);
-      $remote_payment = $this->vaultedShopper->vaultedShopper(
+      $remote_payment = $this->vaultedShopper->addVaultedShopperDetails(
         $this,
         $payment_method,
         $payment_details,
