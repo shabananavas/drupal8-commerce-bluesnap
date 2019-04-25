@@ -39,17 +39,13 @@ class Ach extends OnsiteBase implements AchInterface {
     // Information required to process an ECP/ACH transaction.
     $transaction_data = [
       'ecpTransaction' => [
-        'accountNumber' => $payment_method->account_number->value,
-        'routingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
+        'accountNumber' => NULL,
+        'routingNumber' => NULL,
+        'accountType' => NULL,
       ],
       'merchantTransactionId' => $payment->getOrderId(),
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
-      'payerInfo' => [
-        'firstName' => $address->getGivenName(),
-        'lastName' => $address->getFamilyName(),
-      ],
       'authorizedByShopper' => TRUE,
     ];
 
@@ -58,6 +54,19 @@ class Ach extends OnsiteBase implements AchInterface {
     $owner = $payment_method->getOwner();
     if ($owner && $owner->isAuthenticated()) {
       $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    }
+
+    // Add payer-info and ecp-info, if vaulted shopper is not present.
+    if (empty($transaction_data['vaultedShopperId'])) {
+      $transaction_data['payerInfo'] =  [
+        'firstName' => $address->getGivenName(),
+        'lastName' => $address->getFamilyName(),
+      ];
+      $transaction_data['ecpTransaction'] = [
+        'accountNumber' => $payment_method->account_number->value,
+        'routingNumber' => $payment_method->routing_number->value,
+        'accountType' => $payment_method->account_type->value,
+      ];
     }
 
     // Create the payment transaction on BlueSnap.
@@ -123,7 +132,6 @@ class Ach extends OnsiteBase implements AchInterface {
         $shopper_data,
         $customer_id
       );
-
       if (!empty($customer_id)) {
         // Save the new customer ID.
         $this->setRemoteCustomerId($owner, $remote_payment->id);

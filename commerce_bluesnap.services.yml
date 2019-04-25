@@ -1,6 +1,7 @@
 services:
   commerce_bluesnap.api_service:
     class: Drupal\commerce_bluesnap\ApiService
+    arguments: ['@commerce_bluesnap.logger']
   commerce_bluesnap.vaulted_shopper:
     class: Drupal\commerce_bluesnap\VaultedShopper
     arguments: ['@commerce_bluesnap.api_service']

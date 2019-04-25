@@ -62,8 +62,7 @@ class VaultedShopper {
     $this->apiService->initializeBlueSnap($payment_gateway);
     // Fetch the vaulted shopper and add the card details.
     $vaulted_shopper = $this->getVaultedShopper($payment_gateway, $vaulted_shopper_id);
-    $vaulted_shopper->paymentSources = $data;
-
+    $vaulted_shopper->paymentSources = $data['paymentSources'];
     // Update the vaulted shopper on BlueSnap with the new card.
     $response = BlueSnapVaultedShopper::update($vaulted_shopper_id, $vaulted_shopper);
     if ($response->failed()) {
