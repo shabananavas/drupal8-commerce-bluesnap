@@ -2,21 +2,40 @@
 
 namespace Drupal\commerce_bluesnap;
 
-use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\HostedPaymentFields;
-use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\OnsiteBase;
-use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ach;
 use Bluesnap\Bluesnap;
 use Bluesnap\CardTransaction;
 use Bluesnap\AltTransaction;
 use Bluesnap\HostedPaymentFieldsToken;
 use Bluesnap\Refund;
 use Bluesnap\VaultedShopper;
+
 use Exception;
+
+use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\HostedPaymentFields;
+use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\OnsiteBase;
+use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ach;
+use Psr\Log\LoggerInterface;
 
 /**
  * A utility service providing functionality related to Commerce BlueSnap.
  */
 class ApiService {
+
+  /**
+   * The logger.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $logger;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct(
+    LoggerInterface $logger
+  ) {
+    $this->logger = $logger;
+  }
 
   /**
    * Initialize the BlueSnap client.
