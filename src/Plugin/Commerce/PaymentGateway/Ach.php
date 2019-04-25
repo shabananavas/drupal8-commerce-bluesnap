@@ -53,6 +53,13 @@ class Ach extends OnsiteBase implements AchInterface {
       'authorizedByShopper' => TRUE,
     ];
 
+    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
+    // the payment data.
+    $owner = $payment_method->getOwner();
+    if ($owner && $owner->isAuthenticated()) {
+      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    }
+
     // Create the payment transaction on BlueSnap.
     try {
       $result = $this->apiService->createAltTransaction($this, $transaction_data);
@@ -103,6 +110,27 @@ class Ach extends OnsiteBase implements AchInterface {
         throw new \InvalidArgumentException(sprintf('$payment_details must contain the %s key.', $required_key));
       }
     }
+
+    // If authenticated user, create or update the vaulted shopper details.
+    $owner = $payment_method->getOwner();
+    if ($owner && $owner->isAuthenticated()) {
+      $customer_id = $this->getRemoteCustomerId($owner);
+      $shopper_data = $this->vaultedShopper->getEcpVaultedShopperData($payment_method, $payment_details);
+      $remote_payment = $this->vaultedShopper->vaultedShopper(
+        $this,
+        $payment_method,
+        $payment_details,
+        $shopper_data,
+        $customer_id
+      );
+
+      if (!empty($customer_id)) {
+        // Save the new customer ID.
+        $this->setRemoteCustomerId($owner, $remote_payment->id);
+        $owner->save();
+      }
+    }
+
     // Save the payment method.
     $payment_method->routing_number = $payment_details['routing_number'];
     $payment_method->account_number = $payment_details['account_number'];

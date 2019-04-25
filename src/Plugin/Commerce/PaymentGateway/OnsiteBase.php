@@ -2,18 +2,21 @@
 
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
+use Drupal\commerce_bluesnap\ApiService;
+use Drupal\commerce_bluesnap\VaultedShopper;
+
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayInterface;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
+
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayInterface;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
-use Drupal\commerce_bluesnap\ApiService;
 
 /**
  * Provides the bluesnap payment gateway base class.
@@ -35,6 +38,13 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
   protected $apiService;
 
   /**
+   * The Bluesnap vaulted shopper helper service.
+   *
+   * @var \Drupal\commerce_bluesnap\VaultedShopper
+   */
+  protected $vaultedShopper;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(
@@ -46,7 +56,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     LoggerInterface $logger,
-    ApiService $api_service
+    ApiService $api_service,
+    VaultedShopper $vaulted_shopper
   ) {
     parent::__construct(
       $configuration,
@@ -59,6 +70,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
     );
     $this->logger = $logger;
     $this->apiService = $api_service;
+    $this->vaultedShopper = $vaulted_shopper;
   }
 
   /**
@@ -78,8 +90,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
-      $container->get('commerce_authnet.logger'),
-      $container->get('commerce_bluesnap.api_service')
+      $container->get('commerce_bluesnap.logger'),
+      $container->get('commerce_bluesnap.api_service'),
+      $container->get('commerce_bluesnap.vaulted_shopper')
     );
   }
 
