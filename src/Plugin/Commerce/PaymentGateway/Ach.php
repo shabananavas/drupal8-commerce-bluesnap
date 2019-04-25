@@ -41,7 +41,7 @@ class Ach extends OnsiteBase implements AchInterface {
       'ecpTransaction' => [
         'accountNumber' => $payment_method->account_number->value,
         'routingNumber' => $payment_method->routing_number->value,
-        'accountType' => 'CONSUMER_SAVINGS',
+        'accountType' => $payment_method->account_type->value,
       ],
       'merchantTransactionId' => $payment->getOrderId(),
       'currency' => $amount->getCurrencyCode(),
