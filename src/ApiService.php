@@ -3,9 +3,11 @@
 namespace Drupal\commerce_bluesnap;
 
 use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\HostedPaymentFields;
-
+use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\OnsiteBase;
+use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ach;
 use Bluesnap\Bluesnap;
 use Bluesnap\CardTransaction;
+use Bluesnap\AltTransaction;
 use Bluesnap\HostedPaymentFieldsToken;
 use Bluesnap\Refund;
 use Bluesnap\VaultedShopper;
@@ -22,7 +24,7 @@ class ApiService {
    * @param \Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\HostedPaymentFields $payment_gateway
    *   The payment gateway we're using.
    */
-  public function initializeBlueSnap(HostedPaymentFields $payment_gateway) {
+  public function initializeBlueSnap(OnsiteBase $payment_gateway) {
     // Initialize BlueSnap.
     Bluesnap::init(
       $payment_gateway->getEnvironment(),
@@ -65,6 +67,31 @@ class ApiService {
     $response = CardTransaction::create($data);
 
     if ($response->failed()) {
+      $this->logger->log('error', $response->data);
+      throw new Exception($response->data);
+    }
+
+    return $response->data;
+  }
+
+  /**
+   * Creates a new alternative payment transaction on the BlueSnap gateway.
+   *
+   * @param \Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ach $payment_gateway
+   *   The payment gateway we're using.
+   * @param array $data
+   *   An array of payment data to pass to BlueSnap.
+   *
+   * @return array
+   *   The response returned from BlueSnap.
+   *
+   * @throws \Exception
+   */
+  public function createAltTransaction(Ach $payment_gateway, array $data) {
+    $this->initializeBlueSnap($payment_gateway);
+    $response = AltTransaction::create($data);
+    if ($response->failed()) {
+      $this->logger->log('error', $response->data);
       throw new Exception($response->data);
     }
 
