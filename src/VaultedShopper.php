@@ -5,7 +5,9 @@ namespace Drupal\commerce_bluesnap;
 use Bluesnap\VaultedShopper as BlueSnapVaultedShopper;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\OnsiteBase;
+use Drupal\commerce_payment\Exception\HardDeclineException;
 use Exception;
+
 
 /**
  * A utility service providing functionality related to vaulted shopper.
@@ -35,7 +37,6 @@ class VaultedShopper {
   public function createVaultedShopper(OnsiteBase $payment_gateway, array $data) {
     $this->apiService->initializeBlueSnap($payment_gateway);
     $response = BlueSnapVaultedShopper::create($data);
-
     if ($response->failed()) {
       throw new Exception($response->data);
     }
@@ -61,8 +62,7 @@ class VaultedShopper {
   public function addPaymentToVaultedShopper(OnsiteBase $payment_gateway, $vaulted_shopper_id, array $data) {
     $this->apiService->initializeBlueSnap($payment_gateway);
     // Fetch the vaulted shopper and add the card details.
-    $vaulted_shopper = $this->getVaultedShopper($payment_gateway, $vaulted_shopper_id);
-    $vaulted_shopper->paymentSources = $data['paymentSources'];
+    $vaulted_shopper = $data;
     // Update the vaulted shopper on BlueSnap with the new card.
     $response = BlueSnapVaultedShopper::update($vaulted_shopper_id, $vaulted_shopper);
     if ($response->failed()) {
@@ -177,7 +177,7 @@ class VaultedShopper {
         return $this->addPaymentToVaultedShopper($payment_gateway, $customer_id, $shopper_data);
       }
       catch (Exception $e) {
-        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
+        throw new HardDeclineException('Error in updating vaulted shopper: ' . $e->getMessage());
       }
     }
     // If it's a new customer, create a new vaulted shopper on BlueSnap.
@@ -188,7 +188,7 @@ class VaultedShopper {
         return $remote_payment_method;
       }
       catch (Exception $e) {
-        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
+        throw new HardDeclineException('Error in creating vaulted shopper: ' . $e->getMessage());
       }
     }
   }
@@ -244,18 +244,21 @@ class VaultedShopper {
     /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
     $address = $payment_method->getBillingProfile()->get('address')->first();
     $data = [
-      'firstName' => $address->getGivenName(),
-      'lastName' => $address->getFamilyName(),
+      "zip" =>  $address->getPostalCode(),
+      "country" => $address->getCountryCode(),
       'paymentSources' => [
-        'ecpInfo' => [
-          'ecp' => [
-            'routingNumber' => $payment_details['routing_number'],
-            'accountType' => $payment_details['account_type'],
-            'accountNumber' => $payment_details['account_number'],
+        'ecpDetails' => [
+          '0' => [
+            'ecp' => [
+              'routingNumber' => $payment_details['routing_number'],
+              'accountType' => $payment_details['account_type'],
+              'accountNumber' => $payment_details['account_number'],
+            ],
           ],
-          'billingContactInfo' => $this->getBillingContactInfo($payment_method),
         ],
       ],
+      'firstName' => $address->getGivenName(),
+      'lastName' => $address->getFamilyName(),
     ];
     return $data;
   }

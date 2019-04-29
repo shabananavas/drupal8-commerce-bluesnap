@@ -38,15 +38,19 @@ class Ach extends OnsiteBase implements AchInterface {
 
     // Information required to process an ECP/ACH transaction.
     $transaction_data = [
-      'ecpTransaction' => [
-        'accountNumber' => NULL,
-        'routingNumber' => NULL,
-        'accountType' => NULL,
-      ],
       'merchantTransactionId' => $payment->getOrderId(),
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       'authorizedByShopper' => TRUE,
+    ];
+    $transaction_data['payerInfo'] =  [
+      'firstName' => $address->getGivenName(),
+      'lastName' => $address->getFamilyName(),
+    ];
+    $transaction_data['ecpTransaction'] = [
+      'accountNumber' => $payment_method->account_number->value,
+      'routingNumber' => $payment_method->routing_number->value,
+      'accountType' => $payment_method->account_type->value,
     ];
 
     // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
@@ -56,15 +60,16 @@ class Ach extends OnsiteBase implements AchInterface {
       $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
     }
 
-    // Add payer-info and ecp-info, if vaulted shopper is not present.
-    if (empty($transaction_data['vaultedShopperId'])) {
-      $transaction_data['payerInfo'] =  [
-        'firstName' => $address->getGivenName(),
-        'lastName' => $address->getFamilyName(),
-      ];
+    // unset payer-info and ecp-info, if vaulted shopper is present.
+    // If Vaulted shopper is present then the payment method is already added to
+    // the shopper, hence we only have to send the last 5 digits of account and
+    // routing number.
+    if (!empty($transaction_data['vaultedShopperId'])) {
+      unset($transaction_data['payerInfo']);
+      unset($transaction_data['ecpTransaction']);
       $transaction_data['ecpTransaction'] = [
-        'accountNumber' => $payment_method->account_number->value,
-        'routingNumber' => $payment_method->routing_number->value,
+        'publicAccountNumber' => substr($payment_method->account_number->value, -5),
+        'publicRoutingNumber' => substr($payment_method->routing_number->value, -5),
         'accountType' => $payment_method->account_type->value,
       ];
     }
@@ -76,6 +81,7 @@ class Ach extends OnsiteBase implements AchInterface {
     catch (Exception $e) {
       throw new HardDeclineException('Could not charge the payment method. Message: ' . $e->getMessage());
     }
+
     // Mark the payment as pending as we await for transaction details from
     // Bluesnap.
     $payment->setState('pending');
@@ -132,7 +138,7 @@ class Ach extends OnsiteBase implements AchInterface {
         $shopper_data,
         $customer_id
       );
-      if (!empty($customer_id)) {
+      if (!empty($remote_payment)) {
         // Save the new customer ID.
         $this->setRemoteCustomerId($owner, $remote_payment->id);
         $owner->save();
