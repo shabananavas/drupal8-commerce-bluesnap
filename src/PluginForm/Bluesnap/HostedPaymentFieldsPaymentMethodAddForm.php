@@ -74,7 +74,27 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * {@inheritdoc}
    */
-  public function buildCreditCardForm(
+  public function buildConfigurationForm(
+    array $form,
+    FormStateInterface $form_state
+  ) {
+    $form = parent::buildConfigurationForm($form, $form_state);
+    $element = &$form['billing_information']['address']['widget'][0];
+
+    // Add the bluesnap attribute to address form elements.
+    $element['address_line1']['#attributes']['data-bluesnap'] = 'address_line1';
+    $element['address_line2']['#attributes']['data-bluesnap'] = 'address_line2';
+    $element['locality']['#attributes']['data-bluesnap'] = 'address_city';
+    $element['postal_code']['#attributes']['data-bluesnap'] = 'address_zip';
+    $element['country_code']['#attributes']['data-bluesnap'] = 'address_country';
+
+    return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function buildCreditCardForm(
     array $element,
     FormStateInterface $form_state
   ) {
@@ -120,41 +140,21 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * {@inheritdoc}
    */
-  public function submitCreditCardForm(
-    array $element,
-    FormStateInterface $form_state
-  ) {
-    // The payment gateway plugin will process the submitted payment details.
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildConfigurationForm(
-    array $form,
-    FormStateInterface $form_state
-  ) {
-    $form = parent::buildConfigurationForm($form, $form_state);
-    $element = &$form['billing_information']['address']['widget'][0];
-
-    // Add the bluesnap attribute to address form elements.
-    $element['address_line1']['#attributes']['data-bluesnap'] = 'address_line1';
-    $element['address_line2']['#attributes']['data-bluesnap'] = 'address_line2';
-    $element['locality']['#attributes']['data-bluesnap'] = 'address_city';
-    $element['postal_code']['#attributes']['data-bluesnap'] = 'address_zip';
-    $element['country_code']['#attributes']['data-bluesnap'] = 'address_country';
-
-    return $form;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   protected function validateCreditCardForm(
     array &$element,
     FormStateInterface $form_state
   ) {
     // The JS library performs its own validation.
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function submitCreditCardForm(
+    array $element,
+    FormStateInterface $form_state
+  ) {
+    // The payment gateway plugin will process the submitted payment details.
   }
 
   /**
