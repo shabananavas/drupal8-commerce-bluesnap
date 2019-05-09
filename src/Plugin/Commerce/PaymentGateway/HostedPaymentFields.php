@@ -174,8 +174,22 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
-      'merchantTransactionId' => $payment->getOrderId(),
+      'transactionMetadata' => [
+        'metaData' => [
+          [
+            'metaKey' => 'order_id',
+            'metaValue' => $payment->getOrderId(),
+            'metaDescription' => 'The transaction\'s order ID.',
+          ],
+          [
+            'metaKey' => 'store_id',
+            'metaValue' => $payment->getOrder()->getStoreId(),
+            'metaDescription' => 'The transaction\'s store ID.',
+          ],
+        ],
+      ],
     ];
+
     // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
     // the payment data.
     $owner = $payment_method->getOwner();
