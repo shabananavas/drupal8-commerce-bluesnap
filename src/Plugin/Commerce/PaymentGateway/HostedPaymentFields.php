@@ -293,6 +293,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();
+    // Round the amount as it can be manually entered via the Refund form.
     $amount = $this->rounder->round($amount);
     $this->assertRefundAmount($payment, $amount);
 
