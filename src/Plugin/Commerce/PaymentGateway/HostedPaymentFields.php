@@ -27,8 +27,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @CommercePaymentGateway(
  *   id = "bluesnap_hosted_payment_fields",
- *   label = "Bluesnap (Hosted Payment Fields)",
- *   display_label = "Bluesnap",
+ *   label = "BlueSnap (Hosted Payment Fields)",
+ *   display_label = "BlueSnap",
  *   forms = {
  *     "add-payment-method" =
  *   "Drupal\commerce_bluesnap\PluginForm\Bluesnap\HostedPaymentFieldsPaymentMethodAddForm",
