@@ -2,13 +2,14 @@
 
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_bluesnap\ApiService;
+use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
+use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
-use Drupal\commerce_payment\Exception\InvalidRequestException;
-use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
@@ -19,7 +20,6 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 
-use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -40,7 +40,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   js_library = "commerce_bluesnap/form",
  * )
  */
-class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePaymentFieldsInterface {
+class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaymentFieldsInterface {
 
   /**
    * The rounder.
@@ -50,11 +50,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
   protected $rounder;
 
   /**
-   * The Bluesnap API helper service.
+   * The Bluesnap API client factory.
    *
-   * @var \Drupal\commerce_bluesnap\ApiService
+   * @var \Drupal\commerce_bluesnap\Api\ClientFactory
    */
-  protected $apiService;
+  protected $clientFactory;
 
   /**
    * {@inheritdoc}
@@ -68,7 +68,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     RounderInterface $rounder,
-    ApiService $api_service
+    ClientFactory $client_factory
   ) {
     parent::__construct(
       $configuration,
@@ -81,7 +81,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     );
 
     $this->rounder = $rounder;
-    $this->apiService = $api_service;
+    $this->clientFactory = $client_factory;
   }
 
   /**
@@ -101,7 +101,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
       $container->get('commerce_price.rounder'),
-      $container->get('commerce_bluesnap.api_service')
+      $container->get('commerce_bluesnap.client_factory')
     );
   }
 
@@ -193,12 +193,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     }
 
     // Create the payment transaction on BlueSnap.
-    try {
-      $result = $this->apiService->createTransaction($this, $transaction_data);
-    }
-    catch (Exception $e) {
-      throw new HardDeclineException('Could not charge the payment method. Message: ' . $e->getMessage());
-    }
+    $client = $this->clientFactory->get(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->create($transaction_data);
 
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
@@ -223,12 +222,12 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       'cardTransactionType' => 'CAPTURE',
       'transactionId' => $remote_id,
     ];
-    try {
-      $result = $this->apiService->updateTransaction($this, $remote_id, $transaction_data);
-    }
-    catch (Exception $e) {
-      throw new PaymentGatewayException('Could not capture the payment. Message: ' . $e->getMessage());
-    }
+
+    $client = $this->clientFactory(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->update($remote_id, $transaction_data);
 
     $payment->setState('completed');
     $payment->setAmount($amount);
@@ -247,12 +246,12 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       'cardTransactionType' => 'AUTH_REVERSAL',
       'transactionId' => $remote_id,
     ];
-    try {
-      $result = $this->apiService->updateTransaction($this, $remote_id, $transaction_data);
-    }
-    catch (Exception $e) {
-      throw new PaymentGatewayException('Could not void the payment. Message: ' . $e->getMessage());
-    }
+
+    $client = $this->clientFactory(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->update($remote_id, $transaction_data);
 
     $payment->setState('authorization_voided');
     $payment->save();
@@ -272,13 +271,13 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
     $transaction_data = [
       'amount' => $amount->getNumber(),
     ];
-    try {
-      $result = $this->apiService->refundTransaction($this, $payment->getRemoteId(), $transaction_data);
-    }
-    catch (Exception $e) {
-      throw new InvalidRequestException('Could not refund the payment. Message: ' . $e->getMessage());
-    }
+    $client = $this->clientFactory->get(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $client->refund($payment->getRemoteId(), $transaction_data);
 
+    // Update the payment.
     $old_refunded_amount = $payment->getRefundedAmount();
     $new_refunded_amount = $old_refunded_amount->add($amount);
     if ($new_refunded_amount->lessThan($payment->getAmount())) {
@@ -362,35 +361,51 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       'expirationMonth' => $payment_method->card_exp_month->value,
       'expirationYear' => $payment_method->card_exp_year->value,
     ];
-    try {
-      $result = $this->apiService->deleteCardFromVaultedShopper($this, $customer_id, $data);
-    }
-    catch (Exception $e) {
-      throw new InvalidRequestException('Could not delete the payment method. Message: ' . $e->getMessage());
-    }
+
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->deleteCard($customer_id, $data);
 
     // Delete the local entity.
     $payment_method->delete();
   }
 
   /**
+   * Returns the BlueSnap configuration for this payment gateway.
+   *
+   * @return array
+   *   An array holding the BlueSnap configuration as required by the Client
+   *   Factory.
+   *   See \Drupal\commerce_bluesnap\Api\ClientFactory::init() for details.
+   */
+  public function getBluesnapConfig() {
+    return [
+      'env' => $this->getEnvironment(),
+      'username' => $this->getUsername(),
+      'password' => $this->getPassword(),
+    ];
+  }
+
+  /**
    * Returns the environment for BlueSnap.
    */
-  public function getEnvironment() {
+  protected function getEnvironment() {
     return $this->getMode() === 'live' ? 'production' : 'sandbox';
   }
 
   /**
    * Returns the username.
    */
-  public function getUsername() {
+  protected function getUsername() {
     return $this->configuration['username'] ?: '';
   }
 
   /**
    * Returns the password.
    */
-  public function getPassword() {
+  protected function getPassword() {
     return $this->configuration['password'] ?: '';
   }
 
@@ -489,6 +504,12 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       'country' => $address->getCountryCode(),
     ];
 
+    // Get the Vaulted Shopper API client.
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+
     // If this is an existing BlueSnap customer, use the token to create the new
     // card.
     if ($customer_id) {
@@ -498,12 +519,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       ];
 
       // Add the card to the existing vaulted shopper.
-      try {
-        return $this->apiService->addCardToVaultedShopper($this, $customer_id, $credit_card_data);
-      }
-      catch (Exception $e) {
-        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
-      }
+      $client->addCard($customer_id, $credit_card_data);
     }
     // If it's a new customer, create a new vaulted shopper on BlueSnap.
     else {
@@ -528,18 +544,13 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostePayme
       ];
 
       // Create a new vaulted shopper.
-      try {
-        $remote_payment_method = $this->apiService->createVaultedShopper($this, $data);
+      $vaulted_shopper = $client->create($data);
 
-        // Save the new customer ID.
-        $this->setRemoteCustomerId($owner, $remote_payment_method->id);
-        $owner->save();
+      // Save the new customer ID.
+      $this->setRemoteCustomerId($owner, $vaulted_shopper->id);
+      $owner->save();
 
-        return $remote_payment_method;
-      }
-      catch (Exception $e) {
-        throw new HardDeclineException('Unable to verify the credit card: ' . $e->getMessage());
-      }
+      return $vaulted_shopper;
     }
   }
 
