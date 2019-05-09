@@ -3,7 +3,6 @@
 namespace Drupal\commerce_bluesnap\Api;
 
 use Drupal\commerce_payment\Exception\HardDeclineException;
-use Drupal\commerce_payment\Exception\PaymentGatewayException;
 
 use Bluesnap\CardTransaction;
 use Bluesnap\Refund;
