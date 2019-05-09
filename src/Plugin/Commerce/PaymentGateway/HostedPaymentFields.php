@@ -192,6 +192,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
 
     // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
     // the payment data.
+    // TODO: use pfToken instead.
     $owner = $payment_method->getOwner();
     if ($owner && $owner->isAuthenticated()) {
       $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
@@ -223,6 +224,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment->setState($next_state);
     $payment->setRemoteId($result->id);
     $payment->save();
+
+    // TODO: update transaction to store payment ID as `merchantTransactionId`.
   }
 
   /**
@@ -348,6 +351,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     // For auth users, get the card details from the remote payment method.
     if ($remote_payment_method) {
       // The card we added should be the last in the array.
+      // TODO: Ask BlueSnap support to confirm that this is always the case.
       $card = end($remote_payment_method->paymentSources->creditCardInfo);
       $card_type = $this->mapCreditCardType($card->creditCard->cardType);
       $card_number = $card->creditCard->cardLastFourDigits;
@@ -374,6 +378,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $card_expiry_year
     );
     $payment_method->setExpiresTime($expires);
+
+    // TODO: This is not really the payment method's remote ID.
     $payment_method->setRemoteId($payment_details['bluesnap_token']);
     $payment_method->save();
   }
@@ -501,6 +507,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     }
 
     // Anonymous user.
+    // TODO: Why don't we create the payment method for anonymous users here?
     return [];
   }
 
