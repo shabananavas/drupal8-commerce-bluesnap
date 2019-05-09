@@ -290,7 +290,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     PaymentInterface $payment,
     Price $amount = NULL
   ) {
-    ksm($amount);
     $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();
