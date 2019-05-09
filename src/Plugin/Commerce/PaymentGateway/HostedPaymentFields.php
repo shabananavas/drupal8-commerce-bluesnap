@@ -118,7 +118,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * {@inheritdoc}
    */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
+  public function buildConfigurationForm(
+    array $form,
+    FormStateInterface $form_state
+  ) {
     $form = parent::buildConfigurationForm($form, $form_state);
 
     $form['username'] = [
@@ -141,7 +144,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * {@inheritdoc}
    */
-  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
+  public function submitConfigurationForm(
+    array &$form,
+    FormStateInterface $form_state
+  ) {
     parent::submitConfigurationForm($form, $form_state);
 
     if (!$form_state->getErrors()) {
@@ -208,7 +214,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * {@inheritdoc}
    */
-  public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
+  public function capturePayment(
+    PaymentInterface $payment,
+    Price $amount = NULL
+  ) {
     $this->assertPaymentState($payment, ['authorization']);
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
@@ -260,7 +269,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * {@inheritdoc}
    */
-  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+  public function refundPayment(
+    PaymentInterface $payment,
+    Price $amount = NULL
+  ) {
+    ksm($amount);
     $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();
@@ -294,8 +307,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * {@inheritdoc}
    */
-  public function createPaymentMethod(PaymentMethodInterface $payment_method, array $payment_details) {
-    // The expected token and card details must always be present.
+  public function createPaymentMethod(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  ) {
+    // The expected token must always be present.
     $required_keys = [
       'bluesnap_token',
     ];
@@ -309,7 +325,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     }
 
     // Create the payment method on BlueSnap.
-    $remote_payment_method = $this->doCreatePaymentMethod($payment_method, $payment_details);
+    $remote_payment_method = $this->doCreatePaymentMethod(
+      $payment_method,
+      $payment_details
+    );
 
     // Save the remote details in the payment method.
     // For auth users, get the card details from the remote payment method.
@@ -335,7 +354,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment_method->card_number = $card_number;
     $payment_method->card_exp_month = $card_expiry_month;
     $payment_method->card_exp_year = $card_expiry_year;
-    $expires = CreditCard::calculateExpirationTimestamp($card_expiry_month, $card_expiry_year);
+
+    $expires = CreditCard::calculateExpirationTimestamp(
+      $card_expiry_month,
+      $card_expiry_year
+    );
     $payment_method->setExpiresTime($expires);
     $payment_method->setRemoteId($payment_details['bluesnap_token']);
     $payment_method->save();
@@ -455,14 +478,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $owner = $payment_method->getOwner();
 
     // Authenticated user.
-    $customer_id = NULL;
     if ($owner && $owner->isAuthenticated()) {
-      $customer_id = $this->getRemoteCustomerId($owner);
-
       return $this->doCreatePaymentMethodForAuthenticatedUser(
         $payment_method,
         $payment_details,
-        $customer_id
+        $this->getRemoteCustomerId($owner)
       );
     }
 
@@ -491,6 +511,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $customer_id = NULL
   ) {
     $owner = $payment_method->getOwner();
+
     /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
     $address = $payment_method->getBillingProfile()->get('address')->first();
     $billing_info = [
