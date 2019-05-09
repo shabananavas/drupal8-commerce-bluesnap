@@ -22,7 +22,7 @@
     "source": "https://git.drupalcode.org/project/commerce_bluesnap.git"
   },
   "require": {
-    "drupal/commerce": "~2.1",
+    "drupal/commerce": "~2.12",
     "shabananavas/php-bluesnap-sdk": "dev-master"
   }
 }
