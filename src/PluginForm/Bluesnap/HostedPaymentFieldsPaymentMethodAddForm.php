@@ -2,6 +2,7 @@
 
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
+use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
@@ -104,7 +105,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     if (empty($form_state->getValue('bluesnap_token'))) {
       $plugin = $this->entity->getPaymentGateway()->getPlugin();
       $client = $this->clientFactory->get(
-        'hosted_payment_fields',
+        HostedPaymentFieldsClientInterface::API_ID,
         $plugin->getBluesnapConfig()
       );
       $bluesnap_token = $client->createToken();
