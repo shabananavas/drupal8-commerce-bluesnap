@@ -3,7 +3,7 @@
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
 use Drupal\commerce\InlineFormManager;
-use Drupal\commerce_bluesnap\ApiService;
+use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -21,21 +21,32 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
 
   /**
-   * The Bluesnap API helper service.
+   * The Bluesnap API client factory.
    *
-   * @var \Drupal\commerce_bluesnap\ApiService
+   * @var \Drupal\commerce_bluesnap\Api\ClientFactory
    */
-  protected $apiService;
+  protected $clientFactory;
 
   /**
-   * {@inheritdoc}
+   * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
+   *
+   * @param \Drupal\commerce\InlineFormManager $inline_form_manager
+   *   The inline form manager.
+   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
+   *   The route match.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The logger.
+   * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
+   *   The BlueSnap API client factory.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
     RouteMatchInterface $route_match,
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
-    ApiService $api_service
+    ClientFactory $client_factory
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -44,7 +55,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $logger
     );
 
-    $this->apiService = $api_service;
+    $this->clientFactory = $client_factory;
   }
 
   /**
@@ -56,14 +67,34 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $container->get('current_route_match'),
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
-      $container->get('commerce_bluesnap.api_service')
+      $container->get('commerce_bluesnap.client_factory')
     );
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildCreditCardForm(
+  public function buildConfigurationForm(
+    array $form,
+    FormStateInterface $form_state
+  ) {
+    $form = parent::buildConfigurationForm($form, $form_state);
+    $element = &$form['billing_information']['address']['widget'][0];
+
+    // Add the bluesnap attribute to address form elements.
+    $element['address_line1']['#attributes']['data-bluesnap'] = 'address_line1';
+    $element['address_line2']['#attributes']['data-bluesnap'] = 'address_line2';
+    $element['locality']['#attributes']['data-bluesnap'] = 'address_city';
+    $element['postal_code']['#attributes']['data-bluesnap'] = 'address_zip';
+    $element['country_code']['#attributes']['data-bluesnap'] = 'address_country';
+
+    return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function buildCreditCardForm(
     array $element,
     FormStateInterface $form_state
   ) {
@@ -72,7 +103,11 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     // First, initialize BlueSnap.
     if (empty($form_state->getValue('bluesnap_token'))) {
       $plugin = $this->entity->getPaymentGateway()->getPlugin();
-      $bluesnap_token = $this->apiService->getHostedPaymentFieldsToken($plugin);
+      $client = $this->clientFactory->get(
+        'hosted_payment_fields',
+        $plugin->getBluesnapConfig()
+      );
+      $bluesnap_token = $client->createToken();
     }
     else {
       $bluesnap_token = $form_state->getValue('bluesnap_token');
@@ -105,40 +140,21 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * {@inheritdoc}
    */
-  public function submitCreditCardForm(
-    array $element,
-    FormStateInterface $form_state
-  ) {
-    // The payment gateway plugin will process the submitted payment details.
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildConfigurationForm(
-    array $form,
-    FormStateInterface $form_state
-  ) {
-    $form = parent::buildConfigurationForm($form, $form_state);
-
-    // Add the bluesnap attribute to address form elements.
-    $form['billing_information']['address']['widget'][0]['address_line1']['#attributes']['data-bluesnap'] = 'address_line1';
-    $form['billing_information']['address']['widget'][0]['address_line2']['#attributes']['data-bluesnap'] = 'address_line2';
-    $form['billing_information']['address']['widget'][0]['locality']['#attributes']['data-bluesnap'] = 'address_city';
-    $form['billing_information']['address']['widget'][0]['postal_code']['#attributes']['data-bluesnap'] = 'address_zip';
-    $form['billing_information']['address']['widget'][0]['country_code']['#attributes']['data-bluesnap'] = 'address_country';
-
-    return $form;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   protected function validateCreditCardForm(
     array &$element,
     FormStateInterface $form_state
   ) {
     // The JS library performs its own validation.
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function submitCreditCardForm(
+    array $element,
+    FormStateInterface $form_state
+  ) {
+    // The payment gateway plugin will process the submitted payment details.
   }
 
   /**
