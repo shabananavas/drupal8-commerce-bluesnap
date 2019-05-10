@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * @file
+ * Contains install and update functions for Commerce BlueSnap.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function commerce_bluesnap_requirements($phase) {
+  if ($phase !== 'install') {
+    return [];
+  }
+
+  // All good if the library exists.
+  if (class_exists('\Bluesnap')) {
+    return [];
+  }
+
+  return [
+    'commerce_bluesnap_library' => [
+      'description' => t(
+        'Commerce BlueSnap requires the <a href=":library_link">shabananavas/php-bluesnap-sdk</a> library.',
+        [':library_link' => 'https://github.com/shabananavas/php-bluesnap-sdk']
+      ),
+      'severity' => REQUIREMENT_ERROR,
+    ]
+  ];
+}
