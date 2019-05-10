@@ -1,0 +1,8 @@
+services:
+  logger.channel.commerce_bluesnap:
+    parent: logger.channel_base
+    arguments: ['commerce_bluesnap']
+
+  commerce_bluesnap.client_factory:
+    class: Drupal\commerce_bluesnap\Api\ClientFactory
+    arguments: ['@logger.channel.commerce_bluesnap']
