@@ -9,7 +9,7 @@ use Bluesnap\Refund;
 use Psr\Log\LoggerInterface;
 
 /**
- * Client for making requests to the Card Transaction API.
+ * Client for making requests to the Card/Wallet Transactions API.
  */
 class TransactionsClient implements TransactionsClientInterface {
 
