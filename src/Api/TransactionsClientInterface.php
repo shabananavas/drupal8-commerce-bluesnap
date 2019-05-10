@@ -3,7 +3,7 @@
 namespace Drupal\commerce_bluesnap\Api;
 
 /**
- * Defines the interface for all Transactions API clients.
+ * Defines the interface for all Card/Wallet Transactions API clients.
  */
 interface TransactionsClientInterface extends ClientInterface {
 
