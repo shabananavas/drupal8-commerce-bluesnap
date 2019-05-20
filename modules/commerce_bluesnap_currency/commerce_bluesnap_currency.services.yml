@@ -1,0 +1,6 @@
+services:
+  commerce_bluesnap_currency.exchange_rate_bluesnap:
+    class: Drupal\commerce_bluesnap_currency\EventSubscriber\ExchangeRateBluesnap
+    tags:
+      - { name: event_subscriber }
+    arguments: ['@config.factory']
