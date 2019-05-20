@@ -23,6 +23,7 @@
   },
   "require": {
     "drupal/commerce": "~2.0",
+    "drupal/commerce_currency_resolver": "~1.0",
     "shabananavas/php-bluesnap-sdk": "dev-master"
   }
 }
