@@ -5,6 +5,8 @@
  * Provides Commerce integration with the BlueSnap Payment Gateway.
  */
 
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Url;
 
@@ -28,10 +30,69 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
           [
             ':configuration_link' => Url::fromUri(
               'internal:/admin/commerce/config/payment-gateways'
-            )->toString()
+            )->toString(),
           ]
         ) . '</li>';
       $output .= '</ul>';
       return $output;
   }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function commerce_bluesnap_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Add BlueSnap JavaScript iFrame to the  checkout pages.
+  // This will help BlueSnap to detect fraudulent transactions
+  // by gathering device-specific information.
+  if ($form_id == "commerce_checkout_flow_multistep_default") {
+
+    // We need to add Bluesnap javascript iframe only to checkout pages
+    // which uses bluesnap payment gateway.
+    if (!empty($form['review']['payment_information']['summary']['#commerce_payment_method'])) {
+      $payment_method = $form['review']['payment_information']['summary']['#commerce_payment_method'];
+      $payment_gateway = $payment_method->get('payment_gateway')->entity;
+
+      // Proceed only if blue snap payment gateway plugin.
+      if ($payment_gateway->getPluginId() == "bluesnap_hosted_payment_fields") {
+        $url = 'https://www.bluesnap.com';
+        if ($payment_gateway->getPluginConfiguration() == "test") {
+          $url = 'https://sandbox.bluesnap.com';
+        }
+
+        $fraud_session_id = commerce_bluesnap_fraud_session_id($payment_method);
+
+        // Add BlueSnap JavaScript iFrame.
+        $form['review']['fraud_prevention'] = [
+          '#type' => 'inline_template',
+          '#template' => '
+            <iframe
+              width="1"
+              height="1"
+              frameborder="0"
+              scrolling="no"
+              src="{{ url }}//servlet/logo.htm?s={{ fraud_session_id }}">
+              <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s>
+            </iframe>',
+          '#context' => [
+            'url' => $url,
+            'fraud_session_id' => $fraud_session_id,
+          ],
+        ];
+      }
+    }
+  }
+}
+
+/**
+ * Converts payment method UUID to be bluesnap fraud session ID.
+ *
+ * @param Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+ *   The payment method.
+ *
+ * @return string
+ *   Fraud session ID.
+ */
+function commerce_bluesnap_fraud_session_id(PaymentMethodInterface $payment_method) {
+  return substr(str_replace('-', '', $payment_method->uuid()), 0, 31);
 }

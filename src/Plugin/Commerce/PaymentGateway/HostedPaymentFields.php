@@ -174,6 +174,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
+      'transactionFraudInfo' => [
+         "fraudSessionId" => commerce_bluesnap_fraud_session_id($payment_method),
+      ],
       'transactionMetadata' => [
         'metaData' => [
           [
@@ -219,7 +222,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $this->getBluesnapConfig()
     );
     $result = $client->create($transaction_data);
-
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
     $payment->setRemoteId($result->id);
@@ -575,6 +577,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         'state' => $address->getAdministrativeArea(),
         'zip' => $address->getPostalCode(),
         'country' => $address->getCountryCode(),
+        'transactionFraudInfo' => [
+          "fraudSessionId" => commerce_bluesnap_fraud_session_id($payment_method),
+        ],
         'paymentSources' => [
           'creditCardInfo' => [
             [
