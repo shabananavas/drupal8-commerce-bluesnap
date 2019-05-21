@@ -1,7 +1,4 @@
 services:
-  commerce_bluesnap.api_service:
-    class: Drupal\commerce_bluesnap\ApiService
-    arguments: ['@commerce_bluesnap.logger']
   commerce_bluesnap.vaulted_shopper:
     class: Drupal\commerce_bluesnap\VaultedShopper
     arguments: ['@commerce_bluesnap.api_service']
@@ -9,3 +6,10 @@ services:
     class: Drupal\Core\Logger\LoggerChannel
     factory: logger.factory:get
     arguments: ['commerce_bluesnap']
+  logger.channel.commerce_bluesnap:
+    parent: logger.channel_base
+    arguments: ['commerce_bluesnap']
+
+  commerce_bluesnap.client_factory:
+    class: Drupal\commerce_bluesnap\Api\ClientFactory
+    arguments: ['@logger.channel.commerce_bluesnap']
