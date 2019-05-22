@@ -15,12 +15,11 @@ use Drupal\Component\Serialization\Json;
 class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
 
   /**
-   * The config factory.
+   * The commerce currency resolver config.
    *
-   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   * @var \Drupal\Core\Config\ImmutableConfig
    */
-  protected $configFactory;
-
+  protected $config;
 
   /**
    * Creates a new ExchangeRateBluesnap object.
@@ -29,7 +28,7 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
    *   The config factory.
    */
   public function __construct(ConfigFactoryInterface $config_factory) {
-    $this->configFactory = $config_factory;
+    $this->config = $config_factory->get('commerce_currency_resolver.currency_conversion');
   }
 
   /**
@@ -56,17 +55,14 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
     $external_data = [];
     // Prepare for client.
     $url = self::apiUrl(
-      $this->configFactory
-        ->get('commerce_currency_resolver.currency_conversion')
+      $this->config
         ->get('bluesnap')['mode']
     );
     $method = 'GET';
     $options['auth'] = [
-      $this->configFactory
-        ->get('commerce_currency_resolver.currency_conversion')
+      $this->config
         ->get('bluesnap')['username'],
-      $this->configFactory
-        ->get('commerce_currency_resolver.currency_conversion')
+      $this->config
         ->get('bluesnap')['password'],
     ];
     $options['headers'] = [
