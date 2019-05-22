@@ -5,6 +5,7 @@ namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\FraudSession;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -47,7 +48,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     RouteMatchInterface $route_match,
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
-    ClientFactory $client_factory
+    ClientFactory $client_factory,
+    FraudSession $fraud_session
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -57,6 +59,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     );
 
     $this->clientFactory = $client_factory;
+    $this->fraudSession = $fraud_session;
   }
 
   /**
@@ -68,7 +71,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $container->get('current_route_match'),
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
-      $container->get('commerce_bluesnap.client_factory')
+      $container->get('commerce_bluesnap.client_factory'),
+      $container->get('commerce_bluesnap.fraud_session')
     );
   }
 
@@ -133,6 +137,28 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#type' => 'markup',
       '#markup' => '<div id="payment-errors"></div>',
       '#weight' => -200,
+    ];
+
+    // Add BlueSnap JavaScript iFrame.
+    $url = 'https://www.bluesnap.com';
+    if ($this->entity->getPaymentGateway()->getPluginConfiguration() == "test") {
+      $url = 'https://sandbox.bluesnap.com';
+    }
+    $element['fraud_prevention'] = [
+      '#type' => 'inline_template',
+      '#template' => '
+        <iframe
+          width="1"
+          height="1"
+          frameborder="0"
+          scrolling="no"
+          src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}">
+          <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s>
+        </iframe>',
+      '#context' => [
+        'url' => $url,
+        'fraud_session_id' => $this->fraudSession->get(),
+      ],
     ];
 
     return $element;
