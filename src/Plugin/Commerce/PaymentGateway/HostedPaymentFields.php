@@ -231,7 +231,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment->setRemoteId($result->id);
     $payment->save();
 
-    // Remove the fraud session ID.
+    // Fraud session IDs are specific to a payment. Remove the current ID so
+    // that a new one is generated for the next payment.
     $this->fraudSession->remove();
 
     // TODO: update transaction to store payment ID as `merchantTransactionId`.
