@@ -2,9 +2,10 @@
 
 namespace Drupal\commerce_bluesnap_currency\EventSubscriber;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\commerce_currency_resolver\ExchangeRateEventSubscriberBase;
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Component\Serialization\Json;
+
 
 /**
  * Class ExchangeRateBluesnap.
@@ -14,13 +15,21 @@ use Drupal\Component\Serialization\Json;
 class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
 
   /**
+   * The config factory.
+   *
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   */
+  protected $configFactory;
+
+
+  /**
    * Creates a new ExchangeRateBluesnap object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
    */
   public function __construct(ConfigFactoryInterface $config_factory) {
-    $this->configFactory = $config_factory->get('commerce_currency_resolver.currency_conversion');
+    $this->configFactory = $config_factory;
   }
 
   /**
@@ -46,11 +55,19 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
   public function getExternalData($base_currency = NULL) {
     $external_data = [];
     // Prepare for client.
-    $url = self::apiUrl($this->configFactory->get('bluesnap')['mode']);
+    $url = self::apiUrl(
+      $this->configFactory
+        ->get('commerce_currency_resolver.currency_conversion')
+        ->get('bluesnap')['mode']
+    );
     $method = 'GET';
     $options['auth'] = [
-      $this->configFactory->get('bluesnap')['username'],
-      $this->configFactory->get('bluesnap')['password'],
+      $this->configFactory
+        ->get('commerce_currency_resolver.currency_conversion')
+        ->get('bluesnap')['username'],
+      $this->configFactory
+        ->get('commerce_currency_resolver.currency_conversion')
+        ->get('bluesnap')['password'],
     ];
     $options['headers'] = [
       'Accept' => 'application/json',
@@ -58,12 +75,13 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
 
     if ($this->apiClient($method, $url, $options)) {
       $response = Json::decode($this->apiClient($method, $url, $options));
-
-      // Loop through the api response and build the exchange rate array.
-      foreach ($response->currencyRate as $rate) {
-        $code = (string) $rate->quoteCurrency;
-        $rate = (string) $rate->conversionRate;
-        $external_data[$code] = $rate;
+      if (!empty($response['currencyRate'])) {
+        // Loop through the api response and build the exchange rate array.
+        foreach ($response['currencyRate'] as $rate) {
+          $code = (string) $rate['quoteCurrency'];
+          $rate = (string) $rate['conversionRate'];
+          $external_data[$code] = $rate;
+        }
       }
     }
     return $external_data;
@@ -81,7 +99,6 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
       // base currency. Hence we need to recalculate other currencies.
       $exchange_rates = $this->crossSyncCalculate('USD', $data);
     }
-
     return $exchange_rates;
   }
 

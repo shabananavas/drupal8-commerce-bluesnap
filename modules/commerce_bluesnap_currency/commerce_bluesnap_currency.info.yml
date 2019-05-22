@@ -4,5 +4,4 @@ description: 'Provides currency resolver which fetches currency conversion rates
 package: Commerce (contrib)
 core: 8.x
 dependencies:
-  - commerce:commerce_bluesnap
-  - commerce:commerce_currency_resolver
+  - commerce_currency_resolver:commerce_currency_resolver
