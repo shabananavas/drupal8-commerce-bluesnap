@@ -24,5 +24,8 @@
   "require": {
     "drupal/commerce": "~2.12",
     "shabananavas/php-bluesnap-sdk": "dev-master"
+  },
+  "suggest": {
+    "drupal/commerce_currency_resolver": "Enhancement for handling multicurrency for Drupal Commerce."
   }
 }
