@@ -31,6 +31,11 @@ function commerce_bluesnap_currency_form_alter(
     '#title' => t('Bluesnap Settings'),
     '#open' => FALSE,
     '#tree' => TRUE,
+    '#states' => [
+      'visible' => [
+        ':input[name="source"]' => ['value' => 'exchange_rate_bluesnap'],
+      ],
+    ],
   ];
   $form['bluesnap']['username'] = [
     '#type' => 'textfield',
@@ -61,7 +66,7 @@ function commerce_bluesnap_currency_form_alter(
 }
 
 /**
- * Implements hook_form_validate().
+ * Validate handler for.commerce_currency_resolver_admin_conversion form.
  */
 function commerce_bluesnap_currency_resolver_validate(
   &$form,
@@ -88,14 +93,15 @@ function commerce_bluesnap_currency_resolver_validate(
 }
 
 /**
- * Implements hook_form_submit().
+ * Submit handler for.commerce_currency_resolver_admin_conversion form.
  */
 function commerce_bluesnap_currency_resolver_submit(
   &$form,
   FormStateInterface $form_state
 ) {
   // Save the bluesnap settings details.
-  \Drupal::configFactory()->getEditable('commerce_currency_resolver.currency_conversion')
+  \Drupal::configFactory()
+    ->getEditable('commerce_currency_resolver.currency_conversion')
     ->set('bluesnap', $form_state->getValue('bluesnap'))
     ->save();
 }

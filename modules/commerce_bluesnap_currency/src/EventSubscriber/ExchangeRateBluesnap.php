@@ -3,9 +3,8 @@
 namespace Drupal\commerce_bluesnap_currency\EventSubscriber;
 
 use Drupal\commerce_currency_resolver\ExchangeRateEventSubscriberBase;
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Component\Serialization\Json;
-
+use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
  * Class ExchangeRateBluesnap.
