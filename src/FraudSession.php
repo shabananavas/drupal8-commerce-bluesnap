@@ -27,7 +27,9 @@ class FraudSession {
   }
 
   /**
-   * Returns fraud session id
+   * Returns the fraud session ID.
+   *
+   * A new ID will be generated if none exists yet.
    *
    * @return string
    *   Bluesnap fraud session ID
