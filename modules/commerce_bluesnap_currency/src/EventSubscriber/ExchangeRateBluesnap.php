@@ -55,15 +55,12 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
     $external_data = [];
     // Prepare for client.
     $url = self::apiUrl(
-      $this->config
-        ->get('bluesnap')['mode']
+      $this->config->get('bluesnap')['mode']
     );
     $method = 'GET';
     $options['auth'] = [
-      $this->config
-        ->get('bluesnap')['username'],
-      $this->config
-        ->get('bluesnap')['password'],
+      $this->config->get('bluesnap')['username'],
+      $this->config->get('bluesnap')['password'],
     ];
     $options['headers'] = [
       'Accept' => 'application/json',
