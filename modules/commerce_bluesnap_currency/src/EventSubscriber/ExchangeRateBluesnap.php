@@ -5,6 +5,7 @@ namespace Drupal\commerce_bluesnap_currency\EventSubscriber;
 use Drupal\commerce_currency_resolver\ExchangeRateEventSubscriberBase;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 
 /**
  * Class ExchangeRateBluesnap.
@@ -21,13 +22,26 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
   protected $config;
 
   /**
+   * Logger Factory.
+   *
+   * @var \Drupal\Core\Logger\LoggerChannelFactoryInterface
+   */
+  protected $loggerFactory;
+
+  /**
    * Creates a new ExchangeRateBluesnap object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
+   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
+   *   The logger factory.
    */
-  public function __construct(ConfigFactoryInterface $config_factory) {
+  public function __construct(
+    ConfigFactoryInterface $config_factory,
+    LoggerChannelFactoryInterface $logger_factory
+  ) {
     $this->config = $config_factory->get('commerce_currency_resolver.currency_conversion');
+    $this->loggerFactory = $logger_factory->get('commerce_bluesnap_currency');
   }
 
   /**
@@ -67,13 +81,20 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
 
     if ($this->apiClient($method, $url, $options)) {
       $response = Json::decode($this->apiClient($method, $url, $options));
-      if (!empty($response['currencyRate'])) {
-        // Loop through the api response and build the exchange rate array.
-        foreach ($response['currencyRate'] as $rate) {
-          $code = (string) $rate['quoteCurrency'];
-          $rate = (string) $rate['conversionRate'];
-          $external_data[$code] = $rate;
-        }
+      if (empty($response['currencyRate'])) {
+        $this->loggerFactory->error(
+          'An error occured while fetching exchange rates from bluesnap @url',
+          [
+            '@url' => $url,
+          ]
+        );
+        return $external_data;
+      }
+      // Loop through the api response and build the exchange rate array.
+      foreach ($response['currencyRate'] as $rate) {
+        $code = (string) $rate['quoteCurrency'];
+        $rate = (string) $rate['conversionRate'];
+        $external_data[$code] = $rate;
       }
     }
     return $external_data;

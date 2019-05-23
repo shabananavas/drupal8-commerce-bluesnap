@@ -3,4 +3,8 @@ services:
     class: Drupal\commerce_bluesnap_currency\EventSubscriber\ExchangeRateBluesnap
     tags:
       - { name: event_subscriber }
-    arguments: ['@config.factory']
+    arguments: ['@config.factory', '@logger.factory']
+  route_subscriber:
+    class: Drupal\commerce_bluesnap_currency\Routing\RouteSubscriber
+    tags:
+      - { name: event_subscriber }
