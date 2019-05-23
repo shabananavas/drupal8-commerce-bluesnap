@@ -5,25 +5,25 @@ namespace Drupal\commerce_bluesnap;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 
 /**
- * Client for making requests to the Card/Wallet Transactions API.
+ * Service class for handling fraud prevention in bluesnap transactions.
  */
-class FraudSession {
+class FraudSession implements FraudSessionInterface {
 
   /**
-   * The shared temporary storage for commerce_bluesnap.
+   * The private temp store factory.
    *
-   * @var \Drupal\Core\TempStore\SharedTempStore
+   * @var \Drupal\Core\TempStore\PrivateTempStoreFactory
    */
-  protected $tempStore;
+  protected $privateTempStore;
 
   /**
    * Constructs a FraudSession object.
    *
-   * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $temp_store_factory
-   *   The tempstore factory.
+   * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $private_tempstore
+   *   The private temp store factory.
    */
-  public function __construct(PrivateTempStoreFactory $temp_store_factory) {
-    $this->tempStore = $temp_store_factory->get('commerce_bluesnap');
+  public function __construct(PrivateTempStoreFactory $private_tempstore) {
+    $this->privateTempStore = $private_tempstore->get('commerce_bluesnap');
   }
 
   /**
@@ -35,10 +35,12 @@ class FraudSession {
    *   Bluesnap fraud session ID
    */
   public function get() {
-    if (!$this->tempStore->get('fraud_session_id')) {
-      $this->tempStore->set('fraud_session_id', $this->generate());
+    $this->privateTempStore->get('fraud_session_id');
+    if (!$this->privateTempStore->get('fraud_session_id')) {
+      $this->privateTempStore->set('fraud_session_id', $this->generate());
     }
-    return $this->tempStore->get('fraud_session_id');
+
+    return $this->privateTempStore->get('fraud_session_id');
   }
 
   /**
@@ -55,7 +57,39 @@ class FraudSession {
    * Removes fraud session ID from user temp storage.
    */
   public function remove() {
-    $this->tempStore->delete('fraud_session_id');
+    $this->privateTempStore->delete('fraud_session_id');
+  }
+
+  /**
+   * Provides bluesnap device datacollector iframe.
+   *
+   * @param string $mode
+   *   The bluesnap exchange rate API mode, test or production.
+   *
+   * @return array
+   *   Render array which has bluesnap device datacollector iframe markup.
+   */
+  public function iframe($mode) {
+    $url = 'https://www.bluesnap.com';
+    if ($mode == "test") {
+      $url = 'https://sandbox.bluesnap.com';
+    }
+    return [
+      '#type' => 'inline_template',
+      '#template' => '
+        <iframe
+          width="1"
+          height="1"
+          frameborder="0"
+          scrolling="no"
+          src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}">
+          <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s>
+        </iframe>',
+      '#context' => [
+        'url' => $url,
+        'fraud_session_id' => $this->get(),
+      ],
+    ];
   }
 
 }

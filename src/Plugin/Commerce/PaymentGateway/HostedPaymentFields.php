@@ -179,7 +179,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
       'transactionFraudInfo' => [
-         "fraudSessionId" => $this->fraudSession->get(),
+        'fraudSessionId' => $this->fraudSession->get(),
       ],
       'transactionMetadata' => [
         'metaData' => [

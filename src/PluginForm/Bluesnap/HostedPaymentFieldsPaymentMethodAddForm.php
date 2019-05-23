@@ -5,7 +5,7 @@ namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
-use Drupal\commerce_bluesnap\FraudSession;
+use Drupal\commerce_bluesnap\FraudSessionInterface;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -30,6 +30,13 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected $clientFactory;
 
   /**
+   * The fraud session service.
+   *
+   * @var Drupal\commerce_bluesnap\FraudSessionInterface
+   */
+  protected $fraudSession;
+
+  /**
    * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
    *
    * @param \Drupal\commerce\InlineFormManager $inline_form_manager
@@ -42,6 +49,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *   The logger.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
+   * @param Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
+   *   The fraud session service.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
@@ -49,7 +58,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
     ClientFactory $client_factory,
-    FraudSession $fraud_session
+    FraudSessionInterface $fraud_session
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -139,27 +148,9 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#weight' => -200,
     ];
 
-    // Add BlueSnap JavaScript iFrame.
-    $url = 'https://www.bluesnap.com';
-    if ($this->entity->getPaymentGateway()->getPluginConfiguration() == "test") {
-      $url = 'https://sandbox.bluesnap.com';
-    }
-    $element['fraud_prevention'] = [
-      '#type' => 'inline_template',
-      '#template' => '
-        <iframe
-          width="1"
-          height="1"
-          frameborder="0"
-          scrolling="no"
-          src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}">
-          <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s>
-        </iframe>',
-      '#context' => [
-        'url' => $url,
-        'fraud_session_id' => $this->fraudSession->get(),
-      ],
-    ];
+    // Add bluesnap device datacollector iframe.
+    $mode = $this->entity->getPaymentGateway()->getPluginConfiguration()['mode'];
+    $element['fraud_prevention'] = $this->fraudSession->iframe($mode);
 
     return $element;
   }
