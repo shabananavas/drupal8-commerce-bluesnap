@@ -32,7 +32,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * The fraud session service.
    *
-   * @var Drupal\commerce_bluesnap\FraudSessionInterface
+   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
    */
   protected $fraudSession;
 
@@ -149,7 +149,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     ];
 
     // Add bluesnap device datacollector iframe.
-    $mode = $this->entity->getPaymentGateway()->getPluginConfiguration()['mode'];
+    $mode = $this->entity->getPaymentGateway()->getPlugin()->getBluesnapConfig()['env'];
     $element['fraud_prevention'] = $this->fraudSession->iframe($mode);
 
     return $element;

@@ -3,9 +3,19 @@
 namespace Drupal\commerce_bluesnap;
 
 /**
- * Interface to process payments.
+ * Interface to process fraud prevention in bluesnap transactions.
  */
 interface FraudSessionInterface {
+
+  /**
+   * Bluesnap API production URL.
+   */
+  const API_URL_PRODUCTION = 'https://www.bluesnap.com';
+
+  /**
+   * Bluesnap API sandbox URL.
+   */
+  const API_URL_SANDBOX = 'https://sandbox.bluesnap.com';
 
   /**
    * Returns the fraud session ID.

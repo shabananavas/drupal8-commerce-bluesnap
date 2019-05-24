@@ -5,7 +5,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_bluesnap\FraudSession;
+use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -58,6 +58,13 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   protected $clientFactory;
 
   /**
+   * The Bluesnap fraud session process.
+   *
+   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   */
+  protected $fraudSession;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(
@@ -70,7 +77,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     TimeInterface $time,
     RounderInterface $rounder,
     ClientFactory $client_factory,
-    FraudSession $fraud_session
+    FraudSessionInterface $fraud_session
   ) {
     parent::__construct(
       $configuration,

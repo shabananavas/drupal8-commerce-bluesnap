@@ -27,52 +27,39 @@ class FraudSession implements FraudSessionInterface {
   }
 
   /**
-   * Returns the fraud session ID.
-   *
-   * A new ID will be generated if none exists yet.
-   *
-   * @return string
-   *   Bluesnap fraud session ID
+   * {@inheritdoc}
    */
   public function get() {
-    $this->privateTempStore->get('fraud_session_id');
-    if (!$this->privateTempStore->get('fraud_session_id')) {
-      $this->privateTempStore->set('fraud_session_id', $this->generate());
+    $session_id = $this->privateTempStore->get('fraud_session_id');
+    if (!$session_id) {
+      $session_id = $this->generate();
+      $this->privateTempStore->set('fraud_session_id', $session_id);
     }
 
-    return $this->privateTempStore->get('fraud_session_id');
+    return $session_id;
   }
 
   /**
-   * Generates bluesnap fraud session ID.
-   *
-   * @return string
-   *   Bluesnap fraud session ID
+   * {@inheritdoc}
    */
   public function generate() {
     return bin2hex(openssl_random_pseudo_bytes(16));
   }
 
   /**
-   * Removes fraud session ID from user temp storage.
+   * {@inheritdoc}
    */
   public function remove() {
     $this->privateTempStore->delete('fraud_session_id');
   }
 
   /**
-   * Provides bluesnap device datacollector iframe.
-   *
-   * @param string $mode
-   *   The bluesnap exchange rate API mode, test or production.
-   *
-   * @return array
-   *   Render array which has bluesnap device datacollector iframe markup.
+   * {@inheritdoc}
    */
   public function iframe($mode) {
-    $url = 'https://www.bluesnap.com';
-    if ($mode == "test") {
-      $url = 'https://sandbox.bluesnap.com';
+    $url = FraudSessionInterface::API_URL_PRODUCTION;
+    if ($mode == "sandbox") {
+      $url = FraudSessionInterface::API_URL_SANDBOX;
     }
     return [
       '#type' => 'inline_template',
