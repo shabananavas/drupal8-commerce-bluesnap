@@ -51,7 +51,7 @@ interface DataLevelServiceInterface {
    * @return array
    *   Array of level 2 data.
    */
-  public function level2Data(OrderInterface $order);
+  private function level2Data(OrderInterface $order);
 
   /**
    * Provides bluesnap level3 data for transaction processing.
@@ -62,7 +62,7 @@ interface DataLevelServiceInterface {
    * @return array
    *   Array of level 3 data.
    */
-  public function level3Data(OrderInterface $order);
+  private function level3Data(OrderInterface $order);
 
   /**
    * Provides customer reference number of an order.
@@ -73,7 +73,7 @@ interface DataLevelServiceInterface {
    * @return string
    *   Order customer reference number.
    */
-  public function getCustomerReferenceNumber(OrderInterface $order);
+  private function getCustomerReferenceNumber(OrderInterface $order);
 
   /**
    * Provides order adjustment total amount.
@@ -86,7 +86,7 @@ interface DataLevelServiceInterface {
    * @return int
    *   Adjusment total amount.
    */
-  public function getAdjustment(OrderInterface $order, $type);
+  private function getOrderAdjustment(OrderInterface $order, $type);
 
   /**
    * Provides sum of tax rates associated with an order.
@@ -97,7 +97,7 @@ interface DataLevelServiceInterface {
    * @return int
    *   Sum of tax rates.
    */
-  public function getTaxRate(OrderInterface $order);
+  private function getOrderTaxRate(OrderInterface $order);
 
   /**
    * Provides shipping country code and zip code.
@@ -108,6 +108,63 @@ interface DataLevelServiceInterface {
    * @return array|null
    *   Array of shipping country and zip code, null if no shipping info.
    */
-  public function getShippingInfo(OrderInterface $order);
+  private function getShippingInfo(OrderInterface $order);
+
+  /**
+   * Provides bluesnap level3 data items for transaction processing.
+   *
+   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   *   Order object.
+   *
+   * @return array
+   *   Array of level 3 data items.
+   */
+  private function level3DataItems(OrderInterface $order)
+
+  /**
+   * Provides order item adjustment total amount.
+   *
+   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   *   Order item object.
+   * @param string $type
+   *   Adjustment type.
+   *
+   * @return int
+   *   Adjusment total amount.
+   */
+  private function getOrderItemAdjustment(OrderItemInterface $order_item, $type);
+
+  /**
+   * Provides sum of tax rates associated with an order item.
+   *
+   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   *   Order object.
+   *
+   * @return int
+   *   Sum of tax rates.
+   */
+  private function getOrderItemTaxRate(OrderItemInterface $order_item);
+
+  /**
+   * Provides sum of adjustments.
+   *
+   * @param array $adjustments
+   *   Array of adjustments.
+   *
+   * @return int
+   *   Sum of adjustments.
+   */
+  private function getAdjustmentTotal(array $adjustments);
+
+  /**
+   * Provides sum of tax rates.
+   *
+   * @param array $adjustments
+   *   Array of adjustments.
+   *
+   * @return int
+   *   Sum of tax rates.
+   */
+  private function getTaxRateTotal(array $adjustments);
 
 }

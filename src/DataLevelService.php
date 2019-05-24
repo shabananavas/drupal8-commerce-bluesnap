@@ -4,6 +4,7 @@ namespace Drupal\commerce_bluesnap;
 
 use Drupal\commerce_store\Entity\StoreInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
@@ -89,85 +90,78 @@ class DataLevelService {
   /**
    * {@inheritdoc}
    */
-  public function level2Data(OrderInterface $order) {
+  private function level2Data(OrderInterface $order) {
     $level_2_data = [];
     $level_2_data['customerReferenceNumber'] = $this->getCustomerReferenceNumber($order);
-    $level_2_data['salesTaxAmount'] = $this->getAdjustment($order, 'tax');
+
+    if ($sales_tax = $this->getOrderAdjustment($order, 'tax')) {
+      $level_2_data['salesTaxAmount'] = $sales_tax;
+    }
     return $level_2_data;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function level3Data(OrderInterface $order) {
-    $level_3_data = $this->level2Data($order, $card_type);
-    $level_3_data['freightAmount'] = $this->getAdjustment($order, 'shipping');
-    $level_3_data['taxAmount'] = $this->getAdjustment($order, 'tax');
-    $level_3_data['taxRate'] = $this->getTaxRate($order);
-    $level_3_data['discountAmount'] = $this->getAdjustment($order, 'promotion');
+  private function level3Data(OrderInterface $order) {
+    $level_3_data = $this->level2Data($order);
+
+    if ($freight_amount = $this->getOrderAdjustment($order, 'shipping')) {
+      $level_3_data['freightAmount'] = $freight_amount;
+    }
+
+    if ($tax = $this->getOrderAdjustment($order, 'tax')) {
+      $level_3_data['taxAmount'] = $tax;
+    }
+
+    if ($tax_rate = $this->getOrderTaxRate($order)) {
+      $level_3_data['taxRate'] = $tax_rate;
+    }
+
+    if ($promotion = $this->getOrderAdjustment($order, 'promotion')) {
+      $level_3_data['discountAmount'] = $promotion;
+    }
+
     $shipping_info = $this->getShippingInfo($order, 'promotion');
     if (!empty($shipping_info)) {
       $level_3_data = $level_3_data + $shipping_info;
     }
+
+    $level_3_data = $level_3_data + $this->level3DataItems($order);
     return $level_3_data;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getCustomerReferenceNumber(OrderInterface $order) {
+  private function getCustomerReferenceNumber(OrderInterface $order) {
     return $order->getCustomerId();
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getAdjustment(OrderInterface $order, $type) {
+  private function getOrderAdjustment(OrderInterface $order, $type) {
     if (empty($order->collectAdjustments([$type]))) {
       return;
     }
-
-    // Loop through each tax component to get the total
-    // tax amount.
-    $total_price = NULL;
-    foreach ($order->collectAdjustments([$type]) as $tax) {
-      if ($total_price === NULL) {
-        $total_price = $tax->getAmount();
-        continue;
-      }
-      $total_price = $total_price->add($tax->getAmount());
-    }
-
-    // Make promotion number to be a positive integer.
-    if ($type == "promotion") {
-      return -($total_price->getNumber());
-    }
-
-    return $total_price->getNumber();
+    return $this->getAdjustmentTotal($order->collectAdjustments([$type]));
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getTaxRate(OrderInterface $order) {
+  private function getOrderTaxRate(OrderInterface $order) {
     if (empty($order->collectAdjustments(['tax']))) {
       return;
     }
-
-    // Loop through each tax component to get the total
-    // tax rate.
-    $total_tax_tate = 0;
-    foreach ($order->collectAdjustments(['tax']) as $tax) {
-      $total_tax_tate += $tax->getPercentage();
-    }
-
-    return $total_tax_tate;
+    return $this->getTaxRateTotal($order->collectAdjustments(['tax']));
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getShippingInfo(OrderInterface $order) {
+  private function getShippingInfo(OrderInterface $order) {
     if (!$order->hasField('shipments')) {
       return;
     }
@@ -179,6 +173,103 @@ class DataLevelService {
       $data['destinationCountryCode'] = $shipping_profile->getCountryCode();
     }
     return $data;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  private function level3DataItems(OrderInterface $order) {
+    $output = [];
+    // Loop through order items and generate the level3 data array.
+    foreach ($order->getItems() as $key => $order_item) {
+
+      // Line item data.
+      $output[$key]['lineItemTotal'] = $order_item->getTotalPrice()->getNumber();
+      $output[$key]['unitCost'] = $order_item->getUnitPrice()->getNumber();
+      $output[$key]['description'] = $order_item->getTitle();
+      $output[$key]['itemQuantity'] = $order_item->getQuantity();
+
+      // Purchased product data.
+      $purchased_entity = $order_item->getPurchasedEntity();
+      $output[$key]['commodityCode'] = $purchased_entity->getSku();
+      $output[$key]['productCode'] = $purchased_entity->getSku();
+
+      // Discount Info.
+      if ($promotion = $this->getOrderItemAdjustment($order_item, 'promotion')) {
+        $output[$key]['discountAmount'] = -($promotion);
+        // Set discount indicator as no, as the line item
+        // cost we pass is not discounted value.
+        $output[$key]['discountIndicator'] = 'N';
+      }
+
+      // Tax Info.
+      if ($tax = $this->getOrderItemAdjustment($order_item, 'tax')) {
+        $output[$key]['taxAmount'] = $tax;
+        // Set grossNetIndicator as no, as tax amount is not
+        // included in the line item cost we pass.
+        $output[$key]['grossNetIndicator'] = 'N';
+      }
+
+      // Tax Rate Info.
+      if ($tax_rate = $this->getOrderItemTaxRate($order_item)) {
+        $output[$key]['taxRate'] = $tax_rate;
+      }
+    }
+    return $output;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  private function getOrderItemAdjustment(OrderItemInterface $order_item, $type) {
+    $adjustments = $order_item->getAdjustments([$type]);
+    if (empty($adjustments)) {
+      return;
+    }
+    return $this->getAdjustmentTotal($adjustments);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  private function getOrderItemTaxRate($order_item) {
+    $adjustments = $order_item->getAdjustments(['tax']);
+    if (empty($adjustments)) {
+      return;
+    }
+    return $this->getTaxRateTotal($adjustments);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  private function getAdjustmentTotal(array $adjustments) {
+    // Loop through each adjustment component to get the total
+    // adjustment amount.
+    $total_price = NULL;
+    foreach ($adjustments as $adjustment) {
+      if ($total_price === NULL) {
+        $total_price = $adjustment->getAmount();
+        continue;
+      }
+      $total_price = $total_price->add($adjustment->getAmount());
+    }
+
+    return $total_price->getNumber();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  private function getTaxRateTotal(array $adjustments) {
+    // Loop through each tax adjustment to get the total
+    // tax rate.
+    $total_tax_tate = 0;
+    foreach ($adjustments as $tax) {
+      $total_tax_tate += $tax->getPercentage();
+    }
+
+    return $total_tax_tate;
   }
 
 }
