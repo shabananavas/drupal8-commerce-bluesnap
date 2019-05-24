@@ -59,7 +59,7 @@ class DataLevelService {
    * {@inheritdoc}
    */
   public function getDataLevelSetting(StoreInterface $store) {
-    $settings = $store->get('bluensnap_data_level_settings')->value;
+    $settings = $store->get('bluesnap_data_level_settings')->value;
     $settings = json_decode($settings);
     return $settings;
   }
