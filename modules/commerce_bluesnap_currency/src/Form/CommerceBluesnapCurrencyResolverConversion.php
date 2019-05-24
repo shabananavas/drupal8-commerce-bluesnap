@@ -20,6 +20,10 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
     // Get current settings.
     $config = $this->config('commerce_currency_resolver.currency_conversion');
 
+    // Add the bluesnap API password in formstorage, so that
+    // we can have the value in validate function.
+    $form_state->set('bluesnap_api_password', $config->get('bluesnap')['password']);
+
     // Call the parent form.
     $form = parent::buildForm($form, $form_state);
 
@@ -47,7 +51,11 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
     $form['bluesnap']['password'] = [
       '#type' => 'password',
       '#title' => t('Password'),
-      '#default_value' => $config->get('bluesnap')['password'],
+      '#description' => t('
+        If you have already entered your password before,
+        you should leave this field blank,
+        unless you want to change the stored password.
+      '),
     ];
     $form['bluesnap']['mode'] = [
       '#type' => 'radios',
@@ -88,9 +96,12 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
     if (empty($bluesnap_config['username'])) {
       $form_state->setErrorByName('bluesnap][username', t('Bluesnap username field is required'));
     }
-    if (empty($bluesnap_config['password'])) {
+
+    // User might have left the field blank to use the previously stored pw.
+    if (empty($bluesnap_config['password']) && empty($form_state->get('bluesnap_api_password'))) {
       $form_state->setErrorByName('bluesnap][password', t('Bluesnap password field is required'));
     }
+
     if (empty($bluesnap_config['mode'])) {
       $form_state->setErrorByName('bluesnap][mode', t('Bluesnap mode field is required'));
     }
@@ -101,8 +112,15 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     // Save bluesnap settings.
+    $bluesnap_config = $form_state->getValue('bluesnap');
+
+    // User might have left the field blank to use the previously stored pw,
+    // hence store the previous password if pw field is empty.
+    if (empty($bluesnap_config['password'])) {
+      $bluesnap_config['password'] = $form_state->get('bluesnap_api_password');
+    }
     $config = $this->config('commerce_currency_resolver.currency_conversion');
-    $config->set('bluesnap', $form_state->getValue('bluesnap'))
+    $config->set('bluesnap', $bluesnap_config)
       ->save();
 
     parent::submitForm($form, $form_state);
