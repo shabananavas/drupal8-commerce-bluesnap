@@ -203,7 +203,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
 
     // Add bluesnap level2/3 data to transaction
     $transaction_data = $transaction_data
-      + $this->dataLevelService->getData($payment->getOrder());
+      + $this->dataLevelService->getData($payment->getOrder(), $payment_method->card_type->value);
 
     // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
     // the payment data.

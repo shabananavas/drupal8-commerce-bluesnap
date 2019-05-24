@@ -67,7 +67,21 @@ class DataLevelService {
   /**
    * {@inheritdoc}
    */
-  public function getData(OrderInterface $order) {
+  public function getCardSuppprtLevel3() {
+    return ['mastercard', 'visa'];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getCardSuppprtLevel2() {
+    return ['mastercard', 'visa', 'amex'];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getData(OrderInterface $order, $card_type) {
     $store = $order->getStore();
     $output = [];
     // Get data level settings for store.
@@ -79,32 +93,49 @@ class DataLevelService {
     // Check the data level setting and
     // return level2 or level3 data.
     $data_type = $settings->type;
-    if ($data_type == 'level_3') {
+    if ($data_type == 'level_3' && in_array($card_type, $this->getCardSuppprtLevel3())) {
       $output['level3Data'] = $this->level3Data($order, $card_type);
       return $output;
     }
-    $output['level2Data'] = $this->level2Data($order, $card_type);
+    if ($data_type == 'level_2' && in_array($card_type, $this->getCardSuppprtLevel2())) {
+      $output['level2Data'] = $this->level2Data($order, $card_type);
+      return $output;
+    }
     return $output;
   }
 
   /**
    * {@inheritdoc}
    */
-  private function level2Data(OrderInterface $order) {
+  private function level2Data(OrderInterface $order, $card_type) {
     $level_2_data = [];
     $level_2_data['customerReferenceNumber'] = $this->getCustomerReferenceNumber($order);
 
     if ($sales_tax = $this->getOrderAdjustment($order, 'tax')) {
       $level_2_data['salesTaxAmount'] = $sales_tax;
     }
+
+    if ($card_type != 'amex') {
+      return $level_2_data;
+    }
+
+    // Amex Level 2 with TAA (Transaction Advice Addendum) requires.
+    // destinationZipCode along with level2Data. This is an Amex-specific
+    // level that contains item data (such as item description and quantity)
+    // in addition to Level 2 fields. Only lineItemTotal, description,
+    // itemQuantity are required.
+    if ($shipping_info = $this->getShippingInfo($order)) {
+      $level_2_data['destinationZipCode'] = $shipping_info['destinationZipCode'];
+    }
+    $level_2_data['level3DataItem'] = $this->level3DataItems($order, $card_type);
     return $level_2_data;
   }
 
   /**
    * {@inheritdoc}
    */
-  private function level3Data(OrderInterface $order) {
-    $level_3_data = $this->level2Data($order);
+  private function level3Data(OrderInterface $order, $card_type) {
+    $level_3_data = $this->level2Data($order, $card_type);
 
     if ($freight_amount = $this->getOrderAdjustment($order, 'shipping')) {
       $level_3_data['freightAmount'] = $freight_amount;
@@ -122,12 +153,12 @@ class DataLevelService {
       $level_3_data['discountAmount'] = $promotion;
     }
 
-    $shipping_info = $this->getShippingInfo($order, 'promotion');
+    $shipping_info = $this->getShippingInfo($order);
     if (!empty($shipping_info)) {
       $level_3_data = $level_3_data + $shipping_info;
     }
 
-    $level_3_data = $level_3_data + $this->level3DataItems($order);
+    $level_3_data['level3DataItems'] = $this->level3DataItems($order, $card_type);
     return $level_3_data;
   }
 
@@ -178,17 +209,23 @@ class DataLevelService {
   /**
    * {@inheritdoc}
    */
-  private function level3DataItems(OrderInterface $order) {
+  private function level3DataItems(OrderInterface $order, $card_type) {
     $output = [];
     // Loop through order items and generate the level3 data array.
     foreach ($order->getItems() as $key => $order_item) {
 
       // Line item data.
       $output[$key]['lineItemTotal'] = $order_item->getTotalPrice()->getNumber();
-      $output[$key]['unitCost'] = $order_item->getUnitPrice()->getNumber();
       $output[$key]['description'] = $order_item->getTitle();
       $output[$key]['itemQuantity'] = $order_item->getQuantity();
 
+      // For amex cards only lineItemTotal, description,
+      // itemQuantity are required.
+      if ($card_type == 'amex') {
+        continue;
+      }
+
+      $output[$key]['unitCost'] = $order_item->getUnitPrice()->getNumber();
       // Purchased product data.
       $purchased_entity = $order_item->getPurchasedEntity();
       $output[$key]['commodityCode'] = $purchased_entity->getSku();

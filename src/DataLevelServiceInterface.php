@@ -36,33 +36,39 @@ interface DataLevelServiceInterface {
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   Store entity.
+   * @param string $card_type
+   *   The card type.
    *
    * @return array
    *   Level 2/3 data.
    */
-  public function getData(OrderInterface $order);
+  public function getData(OrderInterface $order, $card_type);
 
   /**
    * Provides bluesnap level2 data for transaction processing.
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
+   * @param string $card_type
+   *   The card type.
    *
    * @return array
    *   Array of level 2 data.
    */
-  private function level2Data(OrderInterface $order);
+  private function level2Data(OrderInterface $order, $card_type);
 
   /**
    * Provides bluesnap level3 data for transaction processing.
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
+   * @param string $card_type
+   *   The card type.
    *
    * @return array
    *   Array of level 3 data.
    */
-  private function level3Data(OrderInterface $order);
+  private function level3Data(OrderInterface $order, $card_type);
 
   /**
    * Provides customer reference number of an order.
@@ -115,11 +121,13 @@ interface DataLevelServiceInterface {
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
+   * @param string $card_type
+   *   The card type.
    *
    * @return array
    *   Array of level 3 data items.
    */
-  private function level3DataItems(OrderInterface $order)
+  private function level3DataItems(OrderInterface $order, $card_type)
 
   /**
    * Provides order item adjustment total amount.
