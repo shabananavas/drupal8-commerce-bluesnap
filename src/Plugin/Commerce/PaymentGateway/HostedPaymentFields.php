@@ -5,6 +5,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+use Drupal\commerce_bluesnap\DataLevelService;
 
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -57,6 +58,13 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   protected $clientFactory;
 
   /**
+   * The Bluesnap data level service.
+   *
+   * @var \Drupal\commerce_bluesnap\DataLevelService
+   */
+  protected $dataLevelService;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(
@@ -68,7 +76,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     RounderInterface $rounder,
-    ClientFactory $client_factory
+    ClientFactory $client_factory,
+    DataLevelService $data_level_service
   ) {
     parent::__construct(
       $configuration,
@@ -82,6 +91,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
 
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
+    $this->dataLevelService = $data_level_service;
   }
 
   /**
@@ -101,7 +111,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
       $container->get('commerce_price.rounder'),
-      $container->get('commerce_bluesnap.client_factory')
+      $container->get('commerce_bluesnap.client_factory'),
+      $container->get('commerce_bluesnap.data_level_service')
     );
   }
 
@@ -189,6 +200,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         ],
       ],
     ];
+
+    // Add bluesnap level2/3 data to transaction
+    $transaction_data = $transaction_data
+      + $this->dataLevelService->getData($payment->getOrder());
 
     // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
     // the payment data.

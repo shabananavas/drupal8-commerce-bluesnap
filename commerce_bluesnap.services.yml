@@ -6,3 +6,6 @@ services:
   commerce_bluesnap.client_factory:
     class: Drupal\commerce_bluesnap\Api\ClientFactory
     arguments: ['@logger.channel.commerce_bluesnap']
+
+  commerce_bluesnap.data_level_service:
+    class: Drupal\commerce_bluesnap\DataLevelService
