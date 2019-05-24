@@ -5,11 +5,11 @@
  * Provides Commerce integration with the BlueSnap Payment Gateway.
  */
 
-use Drupal\Core\Routing\RouteMatchInterface;
-use Drupal\Core\Url;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
 
 /**
  * Implements hook_help().
@@ -86,7 +86,7 @@ function commerce_bluesnap_form_commerce_store_form_alter(
 function commerce_bluesnap_form_commerce_store_form_submit($form, FormStateInterface $form_state) {
   $bluesnap_data_level_settings = $form_state->getValue('bluesnap_data_level_settings');
 
-  // Save bluesnap datalevel settings as json string.
+  // Save bluesnap datalevel settings as json encoded string.
   $store = $form_state->getFormObject()->getEntity();
   $store->set('bluensnap_data_level_settings', json_encode($bluesnap_data_level_settings));
   $store->save();
