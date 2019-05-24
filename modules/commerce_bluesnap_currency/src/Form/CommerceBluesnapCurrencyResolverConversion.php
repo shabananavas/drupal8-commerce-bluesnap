@@ -45,7 +45,7 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
       '#default_value' => $config->get('bluesnap')['username'],
     ];
     $form['bluesnap']['password'] = [
-      '#type' => 'textfield',
+      '#type' => 'password',
       '#title' => t('Password'),
       '#default_value' => $config->get('bluesnap')['password'],
     ];
@@ -70,6 +70,11 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
+    $source = $form_state->getValue('source');
+    if ($source !== 'exchange_rate_bluesnap') {
+      parent::validateForm($form, $form_state);
+      return;
+    }
 
     // We are skipping the CommerceCurrencyResolverConversion form validation
     // and executing only the ConfigFormBase validation.
@@ -79,16 +84,15 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
 
     // Make sure that user enters the bluesnap API details, if bluesnap exchange
     // rate is selected.
-    if ($form_state->getValue('source') == 'exchange_rate_bluesnap') {
-      if (empty($form_state->getValue('bluesnap')['username'])) {
-        $form_state->setErrorByName('bluesnap][username', t('Bluesnap username field is required'));
-      }
-      if (empty($form_state->getValue('bluesnap')['password'])) {
-        $form_state->setErrorByName('bluesnap][password', t('Bluesnap password field is required'));
-      }
-      if (empty($form_state->getValue('bluesnap')['mode'])) {
-        $form_state->setErrorByName('bluesnap][mode', t('Bluesnap mode field is required'));
-      }
+    $bluesnap_config = $form_state->getValue('bluesnap');
+    if (empty($bluesnap_config['username'])) {
+      $form_state->setErrorByName('bluesnap][username', t('Bluesnap username field is required'));
+    }
+    if (empty($bluesnap_config['password'])) {
+      $form_state->setErrorByName('bluesnap][password', t('Bluesnap password field is required'));
+    }
+    if (empty($bluesnap_config['mode'])) {
+      $form_state->setErrorByName('bluesnap][mode', t('Bluesnap mode field is required'));
     }
   }
 

@@ -79,24 +79,27 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
       'Accept' => 'application/json',
     ];
 
-    if ($this->apiClient($method, $url, $options)) {
-      $response = Json::decode($this->apiClient($method, $url, $options));
-      if (empty($response['currencyRate'])) {
-        $this->loggerFactory->error(
-          'An error occured while fetching exchange rates from bluesnap @url',
-          [
-            '@url' => $url,
-          ]
-        );
-        return $external_data;
-      }
-      // Loop through the api response and build the exchange rate array.
-      foreach ($response['currencyRate'] as $rate) {
-        $code = (string) $rate['quoteCurrency'];
-        $rate = (string) $rate['conversionRate'];
-        $external_data[$code] = $rate;
-      }
+    $raw_response = $this->apiClient($method, $url, $options);
+    if (!$raw_response) {
+      return [];
     }
+
+    $response = Json::decode($raw_response);
+    if (empty($response['currencyRate'])) {
+      $this->loggerFactory->error(
+        'An error occured while fetching exchange rates from bluesnap @url',
+        ['@url' => $url]
+      );
+      return [];
+    }
+
+    // Loop through the api response and build the exchange rate array.
+    foreach ($response['currencyRate'] as $rate) {
+      $code = (string) $rate['quoteCurrency'];
+      $rate = (string) $rate['conversionRate'];
+      $external_data[$code] = $rate;
+    }
+
     return $external_data;
   }
 
