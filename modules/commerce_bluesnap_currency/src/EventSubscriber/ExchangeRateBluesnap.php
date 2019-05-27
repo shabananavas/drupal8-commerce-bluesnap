@@ -5,7 +5,8 @@ namespace Drupal\commerce_bluesnap_currency\EventSubscriber;
 use Drupal\commerce_currency_resolver\ExchangeRateEventSubscriberBase;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Psr\Log\LoggerInterface;
+
 
 /**
  * Class ExchangeRateBluesnap.
@@ -22,11 +23,12 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
   protected $config;
 
   /**
-   * Logger Factory.
+   * The logger.
    *
-   * @var \Drupal\Core\Logger\LoggerChannelFactoryInterface
+   * @var \Psr\Log\LoggerInterface
    */
-  protected $loggerFactory;
+  protected $logger;
+
 
   /**
    * Creates a new ExchangeRateBluesnap object.
@@ -38,10 +40,10 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
    */
   public function __construct(
     ConfigFactoryInterface $config_factory,
-    LoggerChannelFactoryInterface $logger_factory
+    LoggerInterface $logger
   ) {
     $this->config = $config_factory->get('commerce_currency_resolver.currency_conversion');
-    $this->loggerFactory = $logger_factory->get('commerce_bluesnap_currency');
+    $this->logger = $logger;
   }
 
   /**
@@ -86,7 +88,7 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
 
     $response = Json::decode($raw_response);
     if (empty($response['currencyRate'])) {
-      $this->loggerFactory->error(
+      $this->logger->error(
         'An error occured while fetching exchange rates from bluesnap @url',
         ['@url' => $url]
       );
