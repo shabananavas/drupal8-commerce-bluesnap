@@ -11,9 +11,11 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
  * Bluesnap data level service class.
  *
  * Bluesnap's Enhanced data levels, such as Level 2 and Level 3,
- * require extra information to process the transaction . This service provides
- * a settings form to configure the data level in store and methods for
- * getting level 2 or level 3 data depending on the card type and store settings.
+ * require extra information to process the transaction .
+ * This service provides a settings form to configure the data
+ * level in store and methods for getting
+ * level 2 or level 3 data depending on the
+ * card type and store settings.
  */
 class DataLevelService implements DataLevelServiceInterface {
 
@@ -93,21 +95,21 @@ class DataLevelService implements DataLevelServiceInterface {
     return $output;
   }
 
-   /**
+  /**
    * Provides the card types which supports data level 3.
    *
    * @return array
-   *   Array of level 3 supported card types
+   *   Array of level 3 supported card types.
    */
   private function getCardSupportLevel3() {
     return ['mastercard', 'visa'];
   }
 
   /**
-   * Provides the card types which supports data level 2
+   * Provides the card types which supports data level 2.
    *
    * @return array
-   *   Array of level 2 supported card types
+   *   Array of level 2 supported card types.
    */
   private function getCardSupportLevel2() {
     return ['mastercard', 'visa', 'amex'];
@@ -210,8 +212,8 @@ class DataLevelService implements DataLevelServiceInterface {
    * @param string $type
    *   Adjustment type.
    *
-   * @return int
-   *   Adjusment total amount.
+   * @return int|null
+   *   Adjusment total amount and null if no adjustment found.
    */
   private function getOrderAdjustment(OrderInterface $order, $type) {
     if (empty($order->collectAdjustments([$type]))) {
@@ -226,8 +228,8 @@ class DataLevelService implements DataLevelServiceInterface {
    * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    *
-   * @return int
-   *   Sum of tax rates.
+   * @return int|null
+   *   Sum of tax rates and null if no tax adjustment.
    */
   private function getOrderTaxRate(OrderInterface $order) {
     if (empty($order->collectAdjustments(['tax']))) {
@@ -324,7 +326,7 @@ class DataLevelService implements DataLevelServiceInterface {
    * @param string $type
    *   Adjustment type.
    *
-   * @return int
+   * @return int|null
    *   Adjusment total amount.
    */
   private function getOrderItemAdjustment(OrderItemInterface $order_item, $type) {
@@ -341,10 +343,10 @@ class DataLevelService implements DataLevelServiceInterface {
    * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order object.
    *
-   * @return int
-   *   Sum of tax rates.
+   * @return int|null
+   *   Sum of tax rates, null if no tax adjustment found.
    */
-  private function getOrderItemTaxRate($order_item) {
+  private function getOrderItemTaxRate(OrderItemInterface $order_item) {
     $adjustments = $order_item->getAdjustments(['tax']);
     if (empty($adjustments)) {
       return;

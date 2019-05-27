@@ -47,5 +47,4 @@ interface DataLevelServiceInterface {
    */
   public function getData(OrderInterface $order, $card_type);
 
-
 }
