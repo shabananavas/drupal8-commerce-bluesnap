@@ -592,6 +592,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         'state' => $address->getAdministrativeArea(),
         'zip' => $address->getPostalCode(),
         'country' => $address->getCountryCode(),
+        'transactionFraudInfo' => [
+          "fraudSessionId" => $this->fraudSession->get(),
+        ],
         'paymentSources' => [
           'creditCardInfo' => [
             [
