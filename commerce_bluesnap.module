@@ -49,7 +49,7 @@ function commerce_bluesnap_entity_base_field_info(EntityTypeInterface $entity_ty
 
   // Add bluesnap data level service settings field.
   $fields['bluesnap_settings'] = BaseFieldDefinition::create('string_long')
-    ->setLabel(t('Bluesnap data level settings'))
+    ->setLabel(t('Bluesnap settings'))
     ->setDisplayOptions('view', [
       'region' => 'hidden',
     ])
