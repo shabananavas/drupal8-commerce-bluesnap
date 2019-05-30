@@ -5,6 +5,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -57,6 +58,13 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   protected $clientFactory;
 
   /**
+   * The Bluesnap fraud session process.
+   *
+   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   */
+  protected $fraudSession;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(
@@ -68,7 +76,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     RounderInterface $rounder,
-    ClientFactory $client_factory
+    ClientFactory $client_factory,
+    FraudSessionInterface $fraud_session
   ) {
     parent::__construct(
       $configuration,
@@ -82,6 +91,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
 
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
+    $this->fraudSession = $fraud_session;
   }
 
   /**
@@ -101,7 +111,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
       $container->get('commerce_price.rounder'),
-      $container->get('commerce_bluesnap.client_factory')
+      $container->get('commerce_bluesnap.client_factory'),
+      $container->get('commerce_bluesnap.fraud_session')
     );
   }
 
@@ -174,6 +185,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
+      'transactionFraudInfo' => [
+        'fraudSessionId' => $this->fraudSession->get(),
+      ],
       'transactionMetadata' => [
         'metaData' => [
           [
@@ -224,6 +238,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment->setState($next_state);
     $payment->setRemoteId($result->id);
     $payment->save();
+
+    // Fraud session IDs are specific to a payment. Remove the current ID so
+    // that a new one is generated for the next payment.
+    $this->fraudSession->remove();
 
     // TODO: update transaction to store payment ID as `merchantTransactionId`.
   }
@@ -575,6 +593,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         'state' => $address->getAdministrativeArea(),
         'zip' => $address->getPostalCode(),
         'country' => $address->getCountryCode(),
+        'transactionFraudInfo' => [
+          "fraudSessionId" => $this->fraudSession->get(),
+        ],
         'paymentSources' => [
           'creditCardInfo' => [
             [

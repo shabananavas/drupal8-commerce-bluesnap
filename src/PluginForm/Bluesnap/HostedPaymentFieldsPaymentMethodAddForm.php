@@ -3,8 +3,10 @@
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
-use Drupal\commerce\InlineFormManager;
+use Drupal\commerce_bluesnap\FraudSessionInterface;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+
+use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -29,6 +31,13 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected $clientFactory;
 
   /**
+   * The fraud session service.
+   *
+   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   */
+  protected $fraudSession;
+
+  /**
    * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
    *
    * @param \Drupal\commerce\InlineFormManager $inline_form_manager
@@ -41,13 +50,16 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *   The logger.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
+   * @param Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
+   *   The fraud session service.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
     RouteMatchInterface $route_match,
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
-    ClientFactory $client_factory
+    ClientFactory $client_factory,
+    FraudSessionInterface $fraud_session
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -57,6 +69,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     );
 
     $this->clientFactory = $client_factory;
+    $this->fraudSession = $fraud_session;
   }
 
   /**
@@ -68,7 +81,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $container->get('current_route_match'),
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
-      $container->get('commerce_bluesnap.client_factory')
+      $container->get('commerce_bluesnap.client_factory'),
+      $container->get('commerce_bluesnap.fraud_session')
     );
   }
 
@@ -134,6 +148,10 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#markup' => '<div id="payment-errors"></div>',
       '#weight' => -200,
     ];
+
+    // Add bluesnap device datacollector iframe.
+    $mode = $this->entity->getPaymentGateway()->getPlugin()->getBluesnapConfig()['env'];
+    $element['fraud_prevention'] = $this->fraudSession->iframe($mode);
 
     return $element;
   }
