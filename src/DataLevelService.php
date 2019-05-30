@@ -64,10 +64,10 @@ class DataLevelService implements DataLevelServiceInterface {
    * {@inheritdoc}
    */
   public function getSettings(StoreInterface $store) {
-    $settings = $store->get('bluesnap_data_level_settings')->value;
+    $settings = $store->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
 
-    return $settings;
+    return $settings->data_level->settings;
   }
 
   /**
