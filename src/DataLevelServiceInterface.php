@@ -21,7 +21,7 @@ interface DataLevelServiceInterface {
    *
    * @see \commerce_bluesnap_form_alter()
    */
-  public function buildDataLevelSettingsForm(StoreInterface $store);
+  public function buildSettingsForm(StoreInterface $store);
 
   /**
    * Provides bluesnap data level settings.
@@ -32,7 +32,7 @@ interface DataLevelServiceInterface {
    * @return array
    *   Bluesnap data level settings
    */
-  public function getDataLevelSetting(StoreInterface $store);
+  public function getSettings(StoreInterface $store);
 
   /**
    * Provides level 2/3 data.

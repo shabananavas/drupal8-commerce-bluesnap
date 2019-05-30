@@ -73,9 +73,17 @@ function commerce_bluesnap_form_commerce_store_form_alter(
   /** @var \Drupal\commerce_store\Entity\StoreInterface $store */
   $store = $form_state->getFormObject()->getEntity();
 
+  // Add a form wrapper element for bluesnap settings.
+  $form['bluesnap'] = [
+    '#type' => 'details',
+    '#title' => t('Bluesnap settings'),
+    '#open' => TRUE,
+    '#tree' => TRUE,
+  ];
+
   // Build the bluesnap data level settings form fields.
   $data_level_service = \Drupal::service('commerce_bluesnap.data_level_service');
-  $form += $data_level_service->buildDataLevelSettingsForm($store);
+  $form['bluesnap'] += $data_level_service->buildSettingsForm($store, $form['bluesnap']);
 
   $form['actions']['submit']['#submit'][] = 'commerce_bluesnap_form_commerce_store_form_submit';
 }
@@ -84,10 +92,10 @@ function commerce_bluesnap_form_commerce_store_form_alter(
  * Form submit for the commerce_store entity form.
  */
 function commerce_bluesnap_form_commerce_store_form_submit($form, FormStateInterface $form_state) {
-  $bluesnap_data_level_settings = $form_state->getValue('bluesnap_data_level_settings');
+  $bluesnap = $form_state->getValue('bluesnap');
 
   // Save bluesnap datalevel settings as json encoded string.
   $store = $form_state->getFormObject()->getEntity();
-  $store->set('bluesnap_data_level_settings', json_encode($bluesnap_data_level_settings));
+  $store->set('bluesnap_data_level_settings', json_encode($bluesnap['bluesnap']['data_level_settings']));
   $store->save();
 }
