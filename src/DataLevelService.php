@@ -30,17 +30,17 @@ class DataLevelService implements DataLevelServiceInterface {
     // Get bluesnap data level settings.
     $settings = $this->getSettings($store);
 
-    $form['bluesnap']['data_level_settings'] = [
+    $form['settings'] = [
       '#type' => 'details',
       '#title' => $this->t('Data level settings'),
       '#open' => TRUE,
     ];
-    $form['bluesnap']['data_level_settings']['status'] = [
+    $form['settings']['status'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable bluesnap level 2/3 data processing'),
       '#default_value' => $settings ? $settings->status : '0',
     ];
-    $form['bluesnap']['data_level_settings']['type'] = [
+    $form['settings']['type'] = [
       '#type' => 'radios',
       '#title' => $this->t('Bluesnap data processing level'),
       '#options' => [
@@ -49,7 +49,7 @@ class DataLevelService implements DataLevelServiceInterface {
       ],
       '#states' => [
         'visible' => [
-          ':input[name="bluesnap[bluesnap][data_level_settings][status]"]' => [
+          ':input[name="bluesnap[data_level][settings][status]"]' => [
             'checked' => TRUE,
           ],
         ],
