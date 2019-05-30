@@ -59,7 +59,7 @@ function commerce_bluesnap_entity_base_field_info(EntityTypeInterface $entity_ty
     ->setDisplayConfigurable('form', TRUE)
     ->setDisplayConfigurable('view', TRUE);
 
-  // Add bluesnap data level service settings field.
+  // Add bluesnap kount settings field.
   $fields['bluesnap_kount_settings'] = BaseFieldDefinition::create('string_long')
     ->setLabel(t('Bluesnap kount settings'))
     ->setDisplayOptions('view', [
