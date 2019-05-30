@@ -57,18 +57,17 @@ class FraudSession implements FraudSessionInterface {
    * {@inheritdoc}
    */
   public function getSettings(StoreInterface $store) {
-    $settings = $store->get('bluesnap_kount_settings')->value;
+    $settings = $store->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
 
-    return $settings;
+    return $settings->kount->settings;
   }
 
   /**
    * {@inheritdoc}
    */
   public function getKountMerchantId(StoreInterface $store) {
-    $settings = $store->get('bluesnap_kount_settings')->value;
-    $settings = json_decode($settings);
+    $settings = $this->getSettings($store);
 
     return $settings->merchant_id;
   }
