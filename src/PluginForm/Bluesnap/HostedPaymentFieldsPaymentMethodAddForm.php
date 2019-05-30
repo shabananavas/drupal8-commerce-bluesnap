@@ -149,9 +149,15 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#weight' => -200,
     ];
 
-    // Add bluesnap device datacollector iframe.
+    // Add bluesnap device datacollector iframe for fraud prevention.
+    if ($order = $this->routeMatch->getParameter('commerce_order')) {
+      $store = $order->getStore();
+    }
+    else {
+      $store = $this->storeStorage->loadDefault();
+    }
     $mode = $this->entity->getPaymentGateway()->getPlugin()->getBluesnapConfig()['env'];
-    $element['fraud_prevention'] = $this->fraudSession->iframe($mode);
+    $element['fraud_prevention'] = $this->fraudSession->iframe($mode, $store);
 
     return $element;
   }
