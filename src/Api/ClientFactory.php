@@ -54,6 +54,9 @@ class ClientFactory {
       case VaultedShoppersClientInterface::API_ID:
         return new VaultedShoppersClient($this->logger);
 
+      case AltTransactionsClientInterface::API_ID:
+        return new AltTransactionsClient($this->logger);
+
       default:
         throw new \InvalidArgumentException(
           sprintf('Unsupported API "%s"', $api)
