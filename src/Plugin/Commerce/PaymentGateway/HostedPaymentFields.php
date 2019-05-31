@@ -587,7 +587,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         'firstName' => $address->getGivenName(),
         'lastName' => $address->getFamilyName(),
         'email' => $owner->getEmail(),
-        'address1' => $address->getAddressLine1(),
+        'address' => $address->getAddressLine1(),
         'address2' => $address->getAddressLine2(),
         'city' => $address->getLocality(),
         'state' => $address->getAdministrativeArea(),
