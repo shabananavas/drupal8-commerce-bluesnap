@@ -6,7 +6,7 @@ use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\DataLevelService;
-use Drupal\commerce_bluesnap\FraudSessionInterface;
+use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -61,7 +61,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * The Bluesnap fraud session process.
    *
-   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   * @var \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface
    */
   protected $fraudSession;
 

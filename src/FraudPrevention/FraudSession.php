@@ -1,17 +1,14 @@
 <?php
 
-namespace Drupal\commerce_bluesnap;
+namespace Drupal\commerce_bluesnap\FraudPrevention;
 
 use Drupal\commerce_store\Entity\StoreInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
  * Service class for handling fraud prevention in bluesnap transactions.
  */
 class FraudSession implements FraudSessionInterface {
-
-  use StringTranslationTrait;
 
   /**
    * The private temp store factory.
@@ -28,48 +25,6 @@ class FraudSession implements FraudSessionInterface {
    */
   public function __construct(PrivateTempStoreFactory $private_tempstore) {
     $this->privateTempStore = $private_tempstore->get('commerce_bluesnap');
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildSettingsForm(StoreInterface $store) {
-    $form = [];
-
-    // Get bluesnap data level settings.
-    $settings = $this->getSettings($store);
-
-    $form['settings'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Kount settings'),
-      '#open' => FALSE,
-    ];
-    $form['settings']['merchant_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Kount merchant ID'),
-      '#default_value' => $settings ? $settings->merchant_id : '0',
-    ];
-
-    return $form;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getSettings(StoreInterface $store) {
-    $settings = $store->get('bluesnap_settings')->value;
-    $settings = json_decode($settings);
-
-    return $settings->kount->settings;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getKountMerchantId(StoreInterface $store) {
-    $settings = $this->getSettings($store);
-
-    return $settings->merchant_id;
   }
 
   /**
@@ -102,20 +57,31 @@ class FraudSession implements FraudSessionInterface {
   /**
    * {@inheritdoc}
    */
-  public function iframe($mode, StoreInterface $store) {
+  public function iframe(
+    $mode,
+    StoreInterface $store,
+    $kount_merchant_id = NULL
+  ) {
     $url = FraudSessionInterface::API_URL_PRODUCTION;
     if ($mode == "sandbox") {
       $url = FraudSessionInterface::API_URL_SANDBOX;
     }
 
-    $kount_merchant_id = $this->getKountMerchantID($store);
-    if (empty($kount_merchant_id)) {
-      $kount_merchant_id = FraudSessionInterface::KOUNT_MERCHANT_ID;
-    }
+    $iframe = '
+      <iframe
+        width="1"
+        height="1"
+        frameborder="0"
+        scrolling="no"
+        src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}">
+        <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s={{ fraud_session_id }}>
+      </iframe>
+    ';
 
-    return [
-      '#type' => 'inline_template',
-      '#template' => '
+    // If kount merchant ID is provided then pass
+    // that merchant ID in iframe.
+    if ($kount_merchant_id) {
+      $iframe = '
         <iframe
           width="1"
           height="1"
@@ -123,7 +89,13 @@ class FraudSession implements FraudSessionInterface {
           scrolling="no"
           src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}&m={{ merchant_id}}">
           <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s={{ fraud_session_id }}&m={{ merchant_id}}>
-        </iframe>',
+        </iframe>
+      ';
+    }
+
+    return [
+      '#type' => 'inline_template',
+      '#template' => $iframe,
       '#context' => [
         'url' => $url,
         'fraud_session_id' => $this->get(),

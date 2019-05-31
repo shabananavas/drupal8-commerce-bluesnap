@@ -86,8 +86,8 @@ function commerce_bluesnap_form_commerce_store_form_alter(
   $form['bluesnap']['data_level'] = $data_level_service->buildSettingsForm($store);
 
   // Build the bluesnap kount settings form fields.
-  $fraud_session_service = \Drupal::service('commerce_bluesnap.fraud_session');
-  $form['bluesnap']['kount'] = $fraud_session_service->buildSettingsForm($store);
+  $kount_account = \Drupal::service('commerce_bluesnap.kount_account');
+  $form['bluesnap']['kount'] = $kount_account->buildSettingsForm($store);
 
   $form['actions']['submit']['#submit'][] = 'commerce_bluesnap_form_commerce_store_form_submit';
 }

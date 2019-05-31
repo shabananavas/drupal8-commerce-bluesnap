@@ -4,7 +4,8 @@ namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
-use Drupal\commerce_bluesnap\FraudSessionInterface;
+use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
+use Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface;
 
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
@@ -33,9 +34,16 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * The fraud session service.
    *
-   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   * @var \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface
    */
   protected $fraudSession;
+
+   /**
+   * The kount account service.
+   *
+   * @var \Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface
+   */
+  protected $kountAccount;
 
   /**
    * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
@@ -50,7 +58,9 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *   The logger.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
-   * @param Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
+   * @param Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
+   *   The fraud session service.
+   * @param Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface $kount_account
    *   The fraud session service.
    */
   public function __construct(
@@ -59,7 +69,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
     ClientFactory $client_factory,
-    FraudSessionInterface $fraud_session
+    FraudSessionInterface $fraud_session,
+    KountAccountInterface $kount_account
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -70,6 +81,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
 
     $this->clientFactory = $client_factory;
     $this->fraudSession = $fraud_session;
+    $this->kountAccount = $kount_account;
   }
 
   /**
@@ -82,7 +94,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
       $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.fraud_session')
+      $container->get('commerce_bluesnap.fraud_session'),
+      $container->get('commerce_bluesnap.kount_account')
     );
   }
 
@@ -150,14 +163,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     ];
 
     // Add bluesnap device datacollector iframe for fraud prevention.
-    if ($order = $this->routeMatch->getParameter('commerce_order')) {
-      $store = $order->getStore();
-    }
-    else {
-      $store = $this->storeStorage->loadDefault();
-    }
-    $mode = $this->entity->getPaymentGateway()->getPlugin()->getBluesnapConfig()['env'];
-    $element['fraud_prevention'] = $this->fraudSession->iframe($mode, $store);
+    $element['fraud_prevention'] = $this->deviceDataCollectorScript();
 
     return $element;
   }
@@ -250,6 +256,31 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#validated' => TRUE,
       '#markup' => '<div class="form-control" id="cvv" data-bluesnap="cvv"></div>',
     ];
+  }
+
+  /**
+   * Provides bluesnap device data collector iframe.
+   *
+   * @return array
+   *  Render array which has bluesnap device datacollector iframe markup.
+   */
+  protected function deviceDataCollectorScript() {
+    // Add bluesnap device datacollector iframe for fraud prevention.
+    if ($order = $this->routeMatch->getParameter('commerce_order')) {
+      $store = $order->getStore();
+    }
+    else {
+      $store = $this->storeStorage->loadDefault();
+    }
+
+    $mode = $this->entity
+     ->getPaymentGateway()
+     ->getPlugin()
+     ->getBluesnapConfig()['env'];
+
+    $merchant_id = $this->kountAccount->getKountMerchantId($store);
+
+    return $this->fraudSession->iframe($mode, $store, $merchant_id);
   }
 
 }

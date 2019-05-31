@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\commerce_bluesnap;
+namespace Drupal\commerce_bluesnap\FraudPrevention;
 
 use Drupal\commerce_store\Entity\StoreInterface;
 
@@ -23,41 +23,6 @@ interface FraudSessionInterface {
    * BlueSnap's Kount Merchant ID .
    */
   const KOUNT_MERCHANT_ID = '700000';
-
-  /**
-   * Build the form fields for kount settings.
-   *
-   * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   A store entity, if the settings are for a store.
-   *
-   * @return array
-   *   An array of form fields.
-   *
-   * @see \commerce_bluesnap_form_alter()
-   */
-  public function buildSettingsForm(StoreInterface $store);
-
-  /**
-   * Provides bluesnap kount settings.
-   *
-   * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
-   *
-   * @return array
-   *   Bluesnap kount settings
-   */
-  public function getSettings(StoreInterface $store);
-
-  /**
-   * Provides bluesnap kount merchant ID.
-   *
-   * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
-   *
-   * @return string
-   *   Bluesnap kount merchant id
-   */
-  public function getKountMerchantId(StoreInterface $store);
 
   /**
    * Returns the fraud session ID.
@@ -89,10 +54,12 @@ interface FraudSessionInterface {
    *   The bluesnap exchange rate API mode, test or production.
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
    *   Store entity.
+   * @param int $kount_merchant_id
+   *   Enterprise kount merchant Id.
    *
    * @return array
    *   Render array which has bluesnap device datacollector iframe markup.
    */
-  public function iframe($mode, StoreInterface $store);
+  public function iframe($mode, StoreInterface $store, $kount_merchant_id = NULL);
 
 }
