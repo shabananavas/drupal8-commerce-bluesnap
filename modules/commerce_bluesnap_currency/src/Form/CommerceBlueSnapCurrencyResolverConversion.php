@@ -11,7 +11,7 @@ use Drupal\commerce_currency_resolver\Form\CommerceCurrencyResolverConversion;
  *
  * @package Drupal\commerce_currency_resolver\Form
  */
-class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolverConversion {
+class CommerceBlueSnapCurrencyResolverConversion extends CommerceCurrencyResolverConversion {
 
   /**
    * {@inheritdoc}

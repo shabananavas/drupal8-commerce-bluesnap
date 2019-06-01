@@ -21,7 +21,7 @@ class RouteSubscriber extends RouteSubscriberBase {
     $route
       ->setDefault(
         '_form',
-        '\Drupal\commerce_bluesnap_currency\Form\CommerceBluesnapCurrencyResolverConversion'
+        '\Drupal\commerce_bluesnap_currency\Form\CommerceBlueSnapCurrencyResolverConversion'
       );
   }
 
