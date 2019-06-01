@@ -489,6 +489,15 @@ class DataLevelService implements DataLevelServiceInterface {
     // Loop through each tax adjustment to get the total
     // tax rate.
     foreach ($adjustments as $tax) {
+      $percentage = $tax->getPercentage();
+
+      // If even just one tax adjustment is not calculated as a percentage, then
+      // the whole tax is not considered a percentage. Do not pass the tax rate
+      // property to BlueSnap.
+      if ($percentage === NULL) {
+        return;
+      }
+
       $total_tax_rate += $tax->getPercentage();
     }
 
