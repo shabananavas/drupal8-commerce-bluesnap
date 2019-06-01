@@ -379,7 +379,6 @@ class DataLevelService implements DataLevelServiceInterface {
 
     // Purchased product data.
     $purchased_entity = $order_item->getPurchasedEntity();
-    $output['commodityCode'] = $purchased_entity->getSku();
     $output['productCode'] = $purchased_entity->getSku();
 
     // Discount amount applied to transaction.
