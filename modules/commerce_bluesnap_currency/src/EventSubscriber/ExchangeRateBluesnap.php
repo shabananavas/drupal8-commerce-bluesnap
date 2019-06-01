@@ -68,6 +68,7 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
    */
   public function getExternalData($base_currency = NULL) {
     $external_data = [];
+
     // Prepare for client.
     $url = self::apiUrl(
       $this->config->get('bluesnap')['mode']
@@ -117,6 +118,7 @@ class ExchangeRateBluesnap extends ExchangeRateEventSubscriberBase {
       // base currency. Hence we need to recalculate other currencies.
       $exchange_rates = $this->crossSyncCalculate('USD', $data);
     }
+
     return $exchange_rates;
   }
 
