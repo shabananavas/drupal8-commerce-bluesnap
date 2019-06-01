@@ -2,7 +2,6 @@
 
 namespace Drupal\commerce_bluesnap\FraudPrevention;
 
-use Drupal\commerce_store\Entity\StoreInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 
 /**
@@ -57,41 +56,27 @@ class FraudSession implements FraudSessionInterface {
   /**
    * {@inheritdoc}
    */
-  public function iframe(
-    $mode,
-    StoreInterface $store,
-    $kount_merchant_id = NULL
-  ) {
+  public function iframe($mode, $kount_merchant_id = NULL) {
     $url = FraudSessionInterface::API_URL_PRODUCTION;
     if ($mode == "sandbox") {
       $url = FraudSessionInterface::API_URL_SANDBOX;
     }
 
+    // Prepare the iframe template. The query parameters passed to the iframe's
+    // and image's src tags depend on whether we have a custom merchant ID
+    // (enterprise accounts) or not. In the latter case we do not pass a merchant
+    // ID and BlueSnap will use a default merchant ID.
+    $params = $this->iframeParams($kount_merchant_id);
     $iframe = '
       <iframe
         width="1"
         height="1"
         frameborder="0"
         scrolling="no"
-        src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}">
-        <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s={{ fraud_session_id }}>
+        src="{{ url }}/servlet/logo.htm?' . $params . '">
+        <img width="1" height="1" src="{{ url }}/servlet/logo.gif?' . $params . '">
       </iframe>
     ';
-
-    // If kount merchant ID is provided then pass
-    // that merchant ID in iframe.
-    if ($kount_merchant_id) {
-      $iframe = '
-        <iframe
-          width="1"
-          height="1"
-          frameborder="0"
-          scrolling="no"
-          src="{{ url }}/servlet/logo.htm?s={{ fraud_session_id }}&m={{ merchant_id}}">
-          <img width="1" height="1" src="{{ url }}"/servlet/logo.gif?s={{ fraud_session_id }}&m={{ merchant_id}}>
-        </iframe>
-      ';
-    }
 
     return [
       '#type' => 'inline_template',
@@ -102,6 +87,28 @@ class FraudSession implements FraudSessionInterface {
         'merchant_id' => $kount_merchant_id,
       ],
     ];
+  }
+
+  /**
+   * Prepares the query parameters for the fraud session iframe.
+   *
+   * It includes the Kount merchant ID if we have one, it only includes the
+   * fraud session otherwise.
+   *
+   * @param string|null $koung_merchant_id
+   *   The Kount merchant Id, if we have one (enterprise accounts); NULL
+   *   otherwise.
+   *
+   * @return string
+   *   The query parameters string as required for the iframe template.
+   */
+  protected function iframeParams($kount_merchant_id = NULL) {
+    $params = 's={{ fraud_session_id }}';
+    if ($kount_merchant_id) {
+      $params = '&m={{ merchant_id }}';
+    }
+
+    return $params;
   }
 
 }

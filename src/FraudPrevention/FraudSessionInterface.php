@@ -2,8 +2,6 @@
 
 namespace Drupal\commerce_bluesnap\FraudPrevention;
 
-use Drupal\commerce_store\Entity\StoreInterface;
-
 /**
  * Interface to process fraud prevention in bluesnap transactions.
  */
@@ -52,14 +50,13 @@ interface FraudSessionInterface {
    *
    * @param string $mode
    *   The bluesnap exchange rate API mode, test or production.
-   * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
-   * @param int $kount_merchant_id
-   *   Enterprise kount merchant Id.
+   * @param int|null $kount_merchant_id
+   *   The Kount merchant Id, if we have one (enterprise accounts); NULL
+   *   otherwise.
    *
    * @return array
    *   Render array which has bluesnap device datacollector iframe markup.
    */
-  public function iframe($mode, StoreInterface $store, $kount_merchant_id = NULL);
+  public function iframe($mode, $kount_merchant_id = NULL);
 
 }
