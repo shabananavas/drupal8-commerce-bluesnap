@@ -270,7 +270,12 @@ class DataLevelService implements DataLevelServiceInterface {
    *   Array of shipping country and zip code, null if no shipping info.
    */
   protected function getShippingInfo(OrderInterface $order) {
+    // Nothing to do if the order does not have shipments.
     if (!$order->hasField('shipments')) {
+      return;
+    }
+    $shipments_field = $order->get('shipments');
+    if ($shipments_field->isEmpty()) {
       return;
     }
 
