@@ -20,22 +20,21 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
     // Get current settings.
     $config = $this->config('commerce_currency_resolver.currency_conversion');
 
-    // Add the bluesnap API password in formstorage, so that
-    // we can have the value in validate function.
-    $form_state->set('bluesnap_api_password', $config->get('bluesnap')['password']);
+    // Store whether we have an existing BlueSnap API password set in the form
+    // state so that we know in the validation callback.
+    $form_state->set(
+      'bluesnap_api_password_exists',
+      $config->get('bluesnap.password') ? TRUE : FALSE
+    );
 
     // Call the parent form.
     $form = parent::buildForm($form, $form_state);
 
-    // Unset the form submit coming from parent form as
-    // its been added below.
-    unset($form['submit']);
-
-    // Bluesnap exchange rate config.
+    // BlueSnap exchange rate config.
     $form['bluesnap'] = [
       '#type' => 'details',
-      '#title' => t('Bluesnap Settings'),
-      '#open' => FALSE,
+      '#title' => t('BlueSnap Settings'),
+      '#open' => TRUE,
       '#tree' => TRUE,
       '#states' => [
         'visible' => [
@@ -52,9 +51,8 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
       '#type' => 'password',
       '#title' => t('Password'),
       '#description' => t('
-        If you have already entered your password before,
-        you should leave this field blank,
-        unless you want to change the stored password.
+        Leave this field empty if you have already entered your password before
+        - unless you want to change the existing password.
       '),
     ];
     $form['bluesnap']['mode'] = [
@@ -67,10 +65,9 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
       '#default_value' => $config->get('bluesnap')['mode'],
     ];
 
-    $form['submit'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Submit'),
-    ];
+    // Move the submit button to the end of the form.
+    $form['submit']['#weight'] = 1000;
+
     return $form;
   }
 
@@ -94,16 +91,27 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
     // rate is selected.
     $bluesnap_config = $form_state->getValue('bluesnap');
     if (empty($bluesnap_config['username'])) {
-      $form_state->setErrorByName('bluesnap][username', t('Bluesnap username field is required'));
+      $form_state->setErrorByName(
+        'bluesnap][username',
+        t('BlueSnap username field is required')
+      );
     }
 
-    // User might have left the field blank to use the previously stored pw.
-    if (empty($bluesnap_config['password']) && empty($form_state->get('bluesnap_api_password'))) {
-      $form_state->setErrorByName('bluesnap][password', t('Bluesnap password field is required'));
+    // User might have left the field blank to use the previously stored
+    // password.
+    $password_exists = $form_state->get('bluesnap_api_password_exists');
+    if (empty($bluesnap_config['password']) && !$password_exists) {
+      $form_state->setErrorByName(
+        'bluesnap][password',
+        t('BlueSnap password field is required')
+      );
     }
 
     if (empty($bluesnap_config['mode'])) {
-      $form_state->setErrorByName('bluesnap][mode', t('Bluesnap mode field is required'));
+      $form_state->setErrorByName(
+        'bluesnap][mode',
+        t('BlueSnap mode field is required')
+      );
     }
   }
 
@@ -111,16 +119,28 @@ class CommerceBluesnapCurrencyResolverConversion extends CommerceCurrencyResolve
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    // Save bluesnap settings.
+    $config = $this->config('commerce_currency_resolver.currency_conversion');
+
+    // Clear BlueSnap settings if the source selected is not BlueSnap.
+    $source = $form_state->getValue('source');
+    if ($source !== 'exchange_rate_bluesnap') {
+      $config->clear('bluesnap')->save();
+      parent::submitForm($form, $form_state);
+      return;
+    }
+
+    // Save the submitted BlueSnap settings.
     $bluesnap_config = $form_state->getValue('bluesnap');
 
-    // User might have left the field blank to use the previously stored pw,
-    // hence store the previous password if pw field is empty.
+    // User might have left the field blank to use the previously stored
+    // password, hence store the current password if the submitted field is
+    // empty.
     if (empty($bluesnap_config['password'])) {
-      $bluesnap_config['password'] = $form_state->get('bluesnap_api_password');
+      $bluesnap_config['password'] = $config->get('bluesnap.password');
     }
-    $config = $this->config('commerce_currency_resolver.currency_conversion');
-    $config->set('bluesnap', $bluesnap_config)
+
+    $config
+      ->set('bluesnap', $bluesnap_config)
       ->save();
 
     parent::submitForm($form, $form_state);
