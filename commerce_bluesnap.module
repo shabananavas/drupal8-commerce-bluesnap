@@ -42,7 +42,9 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
 /**
  * Implements hook_entity_base_field_info().
  */
-function commerce_bluesnap_entity_base_field_info(EntityTypeInterface $entity_type) {
+function commerce_bluesnap_entity_base_field_info(
+    EntityTypeInterface $entity_type
+) {
   if ($entity_type->id() !== 'commerce_store') {
     return;
   }
