@@ -23,7 +23,7 @@ interface DataLevelServiceInterface {
    * Build the form fields for BlueSnap data level settings for the given store.
    *
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   A store entity, if the settings are for a store.
+   *   The store for which we are building the settings form.
    *
    * @return array
    *   An array of form fields.
@@ -33,23 +33,23 @@ interface DataLevelServiceInterface {
   public function buildSettingsForm(StoreInterface $store);
 
   /**
-   * Provides bluesnap data level settings.
+   * Returns the BlueSnap data level settings for the given store.
    *
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
+   *   The store for which to get the settings.
    *
    * @return array
-   *   Bluesnap data level settings
+   *   The BlueSnap data level settings.
    */
   public function getSettings(StoreInterface $store);
 
   /**
-   * Provides level 2/3 data.
+   * Returns the level 2/3 data for the given order and card type.
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
-   *   Store entity.
+   *   The order for which to get the data.
    * @param string $card_type
-   *   The card type.
+   *   The card type; different card types require different data.
    *
    * @return array
    *   Level 2/3 data.
