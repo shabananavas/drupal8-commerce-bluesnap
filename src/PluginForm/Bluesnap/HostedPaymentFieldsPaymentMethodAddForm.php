@@ -39,7 +39,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected $fraudSession;
 
    /**
-   * The kount account service.
+   * The Kount account service.
    *
    * @var \Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface
    */
@@ -61,7 +61,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    * @param Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
    *   The fraud session service.
    * @param Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface $kount_account
-   *   The fraud session service.
+   *   The Kount account service.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
@@ -163,7 +163,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     ];
 
     // Add bluesnap device datacollector iframe for fraud prevention.
-    $element['fraud_prevention'] = $this->deviceDataCollectorScript();
+    $element['fraud_prevention'] = $this->deviceDataCollectorIframe();
 
     return $element;
   }
@@ -264,23 +264,24 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    * @return array
    *  Render array which has bluesnap device datacollector iframe markup.
    */
-  protected function deviceDataCollectorScript() {
-    // Add bluesnap device datacollector iframe for fraud prevention.
+  protected function deviceDataCollectorIframe() {
+    // Get the Kount merchant ID from the store settings, if we have one
+    // available for Enterprise accounts. We use the store for the current order,
+    // or the default store if we can't determine the order from the route.
     if ($order = $this->routeMatch->getParameter('commerce_order')) {
       $store = $order->getStore();
     }
     else {
       $store = $this->storeStorage->loadDefault();
     }
+    $merchant_id = $this->kountAccount->getMerchantId($store);
 
     $mode = $this->entity
      ->getPaymentGateway()
      ->getPlugin()
      ->getBluesnapConfig()['env'];
 
-    $merchant_id = $this->kountAccount->getKountMerchantId($store);
-
-    return $this->fraudSession->iframe($mode, $store, $merchant_id);
+    return $this->fraudSession->iframe($mode, $merchant_id);
   }
 
 }
