@@ -102,10 +102,10 @@ class FraudSession implements FraudSessionInterface {
    *   The query parameters string as required for the iframe template.
    */
   protected function iframeParams($kount_merchant_id = NULL) {
-    // Add fraud session id to the param.
+    // Add fraud session ID to the param.
     $params = 's=' . $this->get();
 
-    // Append merchant ID to param if we have a kount merchant id.
+    // Append merchant ID to param if we have a kount merchant ID.
     if ($kount_merchant_id) {
       $params .= '&m=' . $kount_merchant_id;
     }
