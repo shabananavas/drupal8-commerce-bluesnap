@@ -18,11 +18,6 @@ interface FraudSessionInterface {
   const API_URL_SANDBOX = 'https://sandbox.bluesnap.com';
 
   /**
-   * BlueSnap's Kount Merchant ID .
-   */
-  const KOUNT_MERCHANT_ID = '700000';
-
-  /**
    * Returns the fraud session ID.
    *
    * A new ID will be generated if none exists yet.
