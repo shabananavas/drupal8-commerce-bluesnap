@@ -73,8 +73,8 @@ class FraudSession implements FraudSessionInterface {
         height="1"
         frameborder="0"
         scrolling="no"
-        src="{{ url }}/servlet/logo.htm?' . $params . '">
-        <img width="1" height="1" src="{{ url }}/servlet/logo.gif?' . $params . '">
+        src="{{ url }}/servlet/logo.htm?{{ params }}">
+        <img width="1" height="1" src="{{ url }}/servlet/logo.gif?{{ params }}">
       </iframe>
     ';
 
@@ -83,8 +83,7 @@ class FraudSession implements FraudSessionInterface {
       '#template' => $iframe,
       '#context' => [
         'url' => $url,
-        'fraud_session_id' => $this->get(),
-        'merchant_id' => $kount_merchant_id,
+        'params' => $params,
       ],
     ];
   }
@@ -103,9 +102,12 @@ class FraudSession implements FraudSessionInterface {
    *   The query parameters string as required for the iframe template.
    */
   protected function iframeParams($kount_merchant_id = NULL) {
-    $params = 's={{ fraud_session_id }}';
+    // Add fraud session id to the param.
+    $params = 's=' . $this->get();
+
+    // Append merchant ID to param if we have a kount merchant id.
     if ($kount_merchant_id) {
-      $params = '&m={{ merchant_id }}';
+      $params .= '&m=' . $kount_merchant_id;
     }
 
     return $params;
