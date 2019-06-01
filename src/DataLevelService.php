@@ -25,27 +25,25 @@ class DataLevelService implements DataLevelServiceInterface {
    * {@inheritdoc}
    */
   public function buildSettingsForm(StoreInterface $store) {
-    $form = [];
-
-    // Get bluesnap data level settings.
-    $settings = $this->getSettings($store);
-
-    $form['settings'] = [
+    $form = [
       '#type' => 'details',
       '#title' => $this->t('Data level settings'),
       '#open' => TRUE,
     ];
-    $form['settings']['status'] = [
+
+    // Build the form elements.
+    $settings = $this->getSettings($store);
+    $form['status'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Enable bluesnap level 2/3 data processing'),
-      '#default_value' => $settings ? $settings->status : '0',
+      '#title' => $this->t('Enable BlueSnap level 2/3 data processing'),
+      '#default_value' => $settings ? $settings->status : FALSE,
     ];
-    $form['settings']['type'] = [
+    $form['level'] = [
       '#type' => 'radios',
-      '#title' => $this->t('Bluesnap data processing level'),
+      '#title' => $this->t('Data processing level'),
       '#options' => [
-        'level_2' => $this->t('Level 2'),
-        'level_3' => $this->t('Level 3'),
+        self::LEVEL_2_ID => $this->t('Level 2'),
+        self::LEVEL_3_ID => $this->t('Level 3'),
       ],
       '#states' => [
         'visible' => [
@@ -54,7 +52,7 @@ class DataLevelService implements DataLevelServiceInterface {
           ],
         ],
       ],
-      '#default_value' => $settings ? $settings->type : 'level_2',
+      '#default_value' => $settings ? $settings->type : self::LEVEL_2_ID,
     ];
 
     return $form;
@@ -67,7 +65,7 @@ class DataLevelService implements DataLevelServiceInterface {
     $settings = $store->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
 
-    return $settings->data_level->settings;
+    return $settings->data_level;
   }
 
   /**
