@@ -8,7 +8,7 @@ use Drupal\commerce_order\Entity\OrderInterface;
 /**
  * Interface to process level 2/3 data in bluesnap transaction.
  */
-interface DataLevelServiceInterface {
+interface DataLevelInterface {
 
   /**
    * An identifier for Level 2 data to use throughout the code.

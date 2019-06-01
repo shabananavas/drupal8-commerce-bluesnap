@@ -17,7 +17,7 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
  * level 2 or level 3 data depending on the
  * card type and store settings.
  */
-class DataLevelService implements DataLevelServiceInterface {
+class DataLevel implements DataLevelInterface {
 
   use StringTranslationTrait;
 
@@ -33,6 +33,7 @@ class DataLevelService implements DataLevelServiceInterface {
 
     // Build the form elements.
     $settings = $this->getSettings($store);
+
     $form['status'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable BlueSnap level 2/3 data processing'),
@@ -52,7 +53,7 @@ class DataLevelService implements DataLevelServiceInterface {
           ],
         ],
       ],
-      '#default_value' => $settings ? $settings->type : self::LEVEL_2_ID,
+      '#default_value' => $settings ? $settings->level : self::LEVEL_2_ID,
     ];
 
     return $form;
@@ -120,7 +121,7 @@ class DataLevelService implements DataLevelServiceInterface {
    *   Array of level 2 supported card types.
    */
   protected function cardTypeSupportsLevel2($card_type) {
-    return in_array(['mastercard', 'visa', 'amex']);
+    return in_array($card_type, ['mastercard', 'visa', 'amex']);
   }
 
   /**
