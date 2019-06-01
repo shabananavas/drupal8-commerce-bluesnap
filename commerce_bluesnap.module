@@ -81,9 +81,9 @@ function commerce_bluesnap_form_commerce_store_form_alter(
     '#tree' => TRUE,
   ];
 
-  // Build the bluesnap data level settings form fields.
-  $data_level_service = \Drupal::service('commerce_bluesnap.data_level_service');
-  $form['bluesnap']['data_level'] = $data_level_service->buildSettingsForm($store);
+  // Build the BlueSnap data level settings form fields.
+  $data_level = \Drupal::service('commerce_bluesnap.data_level');
+  $form['bluesnap']['data_level'] = $data_level->buildSettingsForm($store);
 
   $form['actions']['submit']['#submit'][] = 'commerce_bluesnap_form_commerce_store_form_submit';
 }
