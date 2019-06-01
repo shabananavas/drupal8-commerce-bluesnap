@@ -16,24 +16,20 @@ class KountAccount implements KountAccountInterface {
    * {@inheritdoc}
    */
   public function buildSettingsForm(StoreInterface $store) {
-    $form = [];
-
-    // Get bluesnap data level settings.
-    $settings = $this->getSettings($store);
-
-    $form['settings'] = [
+    $form = [
       '#type' => 'details',
       '#title' => $this->t('Kount settings'),
       '#open' => FALSE,
     ];
-    $form['settings']['merchant_id'] = [
+
+    // Build the form element for the Kount merchant ID.
+    $settings = $this->getSettings($store);
+    $form['merchant_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Kount merchant ID'),
-      '#default_value' => $settings ? $settings->merchant_id : '0',
+      '#default_value' => $settings ? $settings->merchant_id : NULL,
       '#description' => $this->t("
-        If you are using Kount Enterprise, Please
-        provide kount merchant ID.
-        Leave empty to use BlueSnap's Kount Merchant ID.
+        If you are using Kount Enterprise, please provide your Kount merchant ID.
       "),
     ];
 
@@ -47,16 +43,14 @@ class KountAccount implements KountAccountInterface {
     $settings = $store->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
 
-    return $settings->kount->settings;
+    return $settings->kount;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getKountMerchantId(StoreInterface $store) {
-    $settings = $this->getSettings($store);
-
-    return $settings->merchant_id;
+  public function getMerchantId(StoreInterface $store) {
+    return $this->getSettings($store)->merchant_id;
   }
 
 }

@@ -5,43 +5,43 @@ namespace Drupal\commerce_bluesnap\FraudPrevention;
 use Drupal\commerce_store\Entity\StoreInterface;
 
 /**
- * Interface to process fraud prevention in bluesnap transactions.
+ * Interface for service providing functionality related to the Kount account.
  */
 interface KountAccountInterface {
 
   /**
-   * Build the form fields for kount settings.
+   * Build the BlueSnap Kount settings form fields for the given store.
    *
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   A store entity, if the settings are for a store.
+   *   The store for which we are building the settings for.
    *
    * @return array
-   *   An array of form fields.
+   *   An array of form elements.
    *
    * @see \commerce_bluesnap_form_alter()
    */
   public function buildSettingsForm(StoreInterface $store);
 
   /**
-   * Provides bluesnap kount settings.
+   * Returns the BlueSnap Kount settings for the given store.
    *
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
+   *   The store for which to get the settings.
    *
    * @return array
-   *   Bluesnap kount settings
+   *   The BlueSnap Kount merchant id.
    */
   public function getSettings(StoreInterface $store);
 
   /**
-   * Provides bluesnap kount merchant ID.
+   * Returns the BlueSnap Kount merchant ID for the given store.
    *
    * @param \Drupal\commerce_store\Entity\StoreInterface $store
-   *   Store entity.
+   *   The store for which to get the Kount merchant ID.
    *
    * @return string
-   *   Bluesnap kount merchant id
+   *   The BlueSnap Kount merchant id.
    */
-  public function getKountMerchantId(StoreInterface $store);
+  public function getMerchantId(StoreInterface $store);
 
 }

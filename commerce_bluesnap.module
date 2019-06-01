@@ -85,7 +85,7 @@ function commerce_bluesnap_form_commerce_store_form_alter(
   $data_level_service = \Drupal::service('commerce_bluesnap.data_level_service');
   $form['bluesnap']['data_level'] = $data_level_service->buildSettingsForm($store);
 
-  // Build the bluesnap kount settings form fields.
+  // Build the BlueSnap Kount settings form fields.
   $kount_account = \Drupal::service('commerce_bluesnap.kount_account');
   $form['bluesnap']['kount'] = $kount_account->buildSettingsForm($store);
 
