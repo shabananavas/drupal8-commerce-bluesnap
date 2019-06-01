@@ -2,9 +2,10 @@
 
 namespace Drupal\commerce_bluesnap_currency\Form;
 
+use Drupal\commerce_currency_resolver\Form\CommerceCurrencyResolverConversion;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\commerce_currency_resolver\Form\CommerceCurrencyResolverConversion;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
  * Class CommerceCurrencyResolverConversion.
@@ -12,6 +13,8 @@ use Drupal\commerce_currency_resolver\Form\CommerceCurrencyResolverConversion;
  * @package Drupal\commerce_currency_resolver\Form
  */
 class CommerceBlueSnapCurrencyResolverConversion extends CommerceCurrencyResolverConversion {
+
+  use StringTranslationTrait;
 
   /**
    * {@inheritdoc}
@@ -33,7 +36,7 @@ class CommerceBlueSnapCurrencyResolverConversion extends CommerceCurrencyResolve
     // BlueSnap exchange rate config.
     $form['bluesnap'] = [
       '#type' => 'details',
-      '#title' => t('BlueSnap Settings'),
+      '#title' => $this->t('BlueSnap Settings'),
       '#open' => TRUE,
       '#tree' => TRUE,
       '#states' => [
@@ -44,23 +47,23 @@ class CommerceBlueSnapCurrencyResolverConversion extends CommerceCurrencyResolve
     ];
     $form['bluesnap']['username'] = [
       '#type' => 'textfield',
-      '#title' => t('Username'),
+      '#title' => $this->t('Username'),
       '#default_value' => $config->get('bluesnap')['username'],
     ];
     $form['bluesnap']['password'] = [
       '#type' => 'password',
-      '#title' => t('Password'),
-      '#description' => t('
+      '#title' => $this->t('Password'),
+      '#description' => $this->t('
         Leave this field empty if you have already entered your password before
         - unless you want to change the existing password.
       '),
     ];
     $form['bluesnap']['mode'] = [
       '#type' => 'radios',
-      '#title' => t('Mode'),
+      '#title' => $this->t('Mode'),
       '#options' => [
-        'sandbox' => t('Sandbox'),
-        'production' => t('Production'),
+        'sandbox' => $this->t('Sandbox'),
+        'production' => $this->t('Production'),
       ],
       '#default_value' => $config->get('bluesnap')['mode'],
     ];
