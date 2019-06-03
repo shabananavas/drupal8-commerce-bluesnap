@@ -5,7 +5,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_bluesnap\DataLevelInterface;
+use Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface;
 use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
@@ -68,9 +68,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * The Bluesnap data level service.
    *
-   * @var \Drupal\commerce_bluesnap\DataLevelInterface
+   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface
    */
-  protected $dataLevel;
+  protected $enhanced_data;
 
   /**
    * Constructs a new HostedPaymentFields object.
@@ -95,7 +95,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
    *   The Bluesnap fraud session process.
-   * @param \Drupal\commerce_bluesnap\DataLevelInterface $data_level
+   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface $enhanced_data
    *   The Bluesnap data level service.
    */
   public function __construct(
@@ -109,7 +109,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     RounderInterface $rounder,
     ClientFactory $client_factory,
     FraudSessionInterface $fraud_session,
-    DataLevelInterface $data_level
+    DataInterface $enhanced_data
   ) {
     parent::__construct(
       $configuration,
@@ -124,7 +124,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
     $this->fraudSession = $fraud_session;
-    $this->dataLevel = $data_level;
+    $this->enhancedData = $enhanced_data;
   }
 
   /**
@@ -146,7 +146,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.fraud_session'),
-      $container->get('commerce_bluesnap.data_level')
+      $container->get('commerce_bluesnap.enhanced_data')
     );
   }
 
@@ -239,7 +239,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     ];
 
     // Add bluesnap level2/3 data to transaction
-    $level_2_3_data = $this->dataLevel->getData(
+    $level_2_3_data = $this->enhancedData->getData(
       $payment->getOrder(),
       $payment_method->card_type->value
     );

@@ -1,101 +1,117 @@
 <?php
 
-namespace Drupal\commerce_bluesnap;
+namespace Drupal\commerce_bluesnap\EnhancedDataLevel;
 
-use Drupal\commerce_store\Entity\StoreInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
- * Bluesnap data level service class.
+ * Bluesnap enhanced data class.
  *
  * Bluesnap's Enhanced data levels, such as Level 2 and Level 3,
  * require extra information to process the transaction .
- * This service provides a settings form to configure the data
- * level in store and methods for getting
+ * This service provides methods for getting
  * level 2 or level 3 data depending on the
- * card type and store settings.
+ * card type and store/product variation settings.
  */
-class DataLevel implements DataLevelInterface {
-
-  use StringTranslationTrait;
+class Data implements DataInterface {
 
   /**
-   * {@inheritdoc}
+   * The BlueSnap enhanced data config.
+   *
+   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface
    */
-  public function buildSettingsForm(StoreInterface $store) {
-    $form = [
-      '#type' => 'details',
-      '#title' => $this->t('Data level settings'),
-      '#open' => TRUE,
-    ];
-
-    // Build the form elements.
-    $settings = $this->getSettings($store);
-
-    $form['status'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable BlueSnap level 2/3 data processing'),
-      '#default_value' => $settings ? $settings->status : FALSE,
-    ];
-    $form['level'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('Data processing level'),
-      '#options' => [
-        self::LEVEL_2_ID => $this->t('Level 2'),
-        self::LEVEL_3_ID => $this->t('Level 3'),
-      ],
-      '#states' => [
-        'visible' => [
-          ':input[name="bluesnap[data_level][settings][status]"]' => [
-            'checked' => TRUE,
-          ],
-        ],
-      ],
-      '#default_value' => $settings ? $settings->level : self::LEVEL_2_ID,
-    ];
-
-    return $form;
-  }
+  protected $config;
 
   /**
-   * {@inheritdoc}
+   * Constructs a new blueSnap enhanced data object.
+   *
+   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface $config
+   *   The BlueSnap enhanced data config.
    */
-  public function getSettings(StoreInterface $store) {
-    $settings = $store->get('bluesnap_settings')->value;
-    $settings = json_decode($settings);
-
-    return $settings->data_level;
+  public function __construct(ConfigInterface $config) {
+    $this->config = $config;
   }
 
   /**
    * {@inheritdoc}
    */
   public function getData(OrderInterface $order, $card_type) {
-    $store = $order->getStore();
     $output = [];
 
-    // Get data level settings for store.
-    $settings = $this->getSettings($store);
-    if (!$settings->status) {
+    // Get the blueSnap enhanced data level.
+    // Proceed only if enhanced data is set in either store
+    // or product variation config.
+    $data_level = $this->dataLevel($order);
+    if (!($data_level)) {
       return $output;
     }
 
     // Build and return the data depending on the configured level.
-    $data_level = $settings->level;
-    $is_level_3 = $data_level === self::LEVEL_3_ID;
+    $is_level_3 = $data_level === ConfigInterface::LEVEL_3_ID;
     if ($is_level_3 && $this->cardTypeSupportsLevel3($card_type)) {
       $output['level3Data'] = $this->level3Data($order, $card_type);
       return $output;
     }
-    $is_level_2 = $data_level === self::LEVEL_2_ID;
+    $is_level_2 = $data_level === ConfigInterface::LEVEL_2_ID;
     if ($is_level_2 && $this->cardTypeSupportsLevel2($card_type)) {
       $output['level2Data'] = $this->level2Data($order, $card_type);
       return $output;
     }
 
     return $output;
+  }
+
+  /**
+   * Returns data level if enhanced data is set, FALSE otherwise.
+   *
+   * For a given order, checks whether the enhanced data is
+   * set in store level. Store level setting takes priority over
+   * SKU level setting, hence the enhanced data status will be
+   * considered as true for the order if it is set in store level.
+   * If enhanced data is not set in store level
+   * we loop through each product in the order to see if there is atleast
+   * one product which have enhanced data set.
+   * If yes enhanced data status will beconsidered
+   * as true for the entire order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object for which we are checking the enhanced data status.
+   *
+   * @return int|bool
+   *   data level if enhanced data is set for the order, FALSE otherwise.
+   */
+  protected function dataLevel(OrderInterface $order) {
+    $store = $order->getStore();
+    // Get enhanced data settings for the store.
+    $settings = $this->config->getSettings($store);
+
+    if ($settings->status) {
+      return $settings->level;
+    }
+
+    // If enhanced data level is turned off in store,
+    // we iterate through each product to see
+    // if anyone of the product in the order has
+    // enhanced data level turned on.
+    foreach ($order->getItems() as $order_item) {
+      if (!($order_item->hasPurchasedEntity())) {
+        continue;
+      }
+
+      $purchased_entity = $order_item->getPurchasedEntity();
+
+      // Get enhanced data settings for product.
+      $settings = $this->config->getSettings($purchased_entity);
+      if (!($settings->status)) {
+        continue;
+      }
+
+      $data_level = $settings->level;
+      return $data_level;
+    }
+
+    return FALSE;
   }
 
   /**
@@ -482,7 +498,7 @@ class DataLevel implements DataLevelInterface {
    *   Array of adjustments.
    *
    * @return int
-   *   Sum of tax rates.
+   *   Sum of tax rates, NULL if no percentage tax found
    */
   protected function getTaxRateTotal(array $adjustments) {
     $total_tax_rate = NULL;
@@ -496,7 +512,7 @@ class DataLevel implements DataLevelInterface {
       // the whole tax is not considered a percentage. Do not pass the tax rate
       // property to BlueSnap.
       if ($percentage === NULL) {
-        return;
+        return NULL;
       }
 
       $total_tax_rate += $tax->getPercentage();

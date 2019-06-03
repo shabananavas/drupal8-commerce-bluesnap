@@ -6,6 +6,7 @@
  */
 
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -45,7 +46,8 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
 function commerce_bluesnap_entity_base_field_info(
     EntityTypeInterface $entity_type
 ) {
-  if ($entity_type->id() !== 'commerce_store') {
+  if ($entity_type->id() !== 'commerce_store'
+    && $entity_type->id() !== 'commerce_product_variation') {
     return;
   }
 
@@ -65,15 +67,26 @@ function commerce_bluesnap_entity_base_field_info(
 }
 
 /**
- * Implements hook_form_BASE_FORM_ID_alter().
+ * Implements hook_form_alter().
  */
-function commerce_bluesnap_form_commerce_store_form_alter(
+function commerce_bluesnap_form_alter(
   &$form,
   FormStateInterface $form_state,
   $form_id
 ) {
-  /** @var \Drupal\commerce_store\Entity\StoreInterface $store */
-  $store = $form_state->getFormObject()->getEntity();
+  // Early return if we are not dealing with a entity form.
+  $form_object = $form_state->getFormObject();
+  if (!($form_object instanceof EntityFormInterface)) {
+    return;
+  }
+
+  // We are currently interested only in product variation
+  // and store entity types.
+  $entity_type = $form_object->getEntity()->getEntityTypeId();
+  if ($entity_type != 'commerce_product_variation' &&
+    $entity_type != 'commerce_store') {
+    return;
+  }
 
   // Add a form wrapper element for bluesnap settings.
   $form['bluesnap'] = [
@@ -84,20 +97,20 @@ function commerce_bluesnap_form_commerce_store_form_alter(
   ];
 
   // Build the BlueSnap data level settings form fields.
-  $data_level = \Drupal::service('commerce_bluesnap.data_level');
-  $form['bluesnap']['data_level'] = $data_level->buildSettingsForm($store);
+  $enhanced_data_config = \Drupal::service('commerce_bluesnap.enhanced_data_config');
+  $form['bluesnap']['data_level'] = $enhanced_data_config->buildSettingsForm($form_state);
 
   // Execute our submit handler first.
   array_unshift(
     $form['actions']['submit']['#submit'],
-    'commerce_bluesnap_form_commerce_store_form_submit'
+    'commerce_bluesnap_form_commerce_bluesnap_settings_form_submit'
   );
 }
 
 /**
- * Form submit for the commerce_store entity form.
+ * Form submit for the blueSnap settings form.
  */
-function commerce_bluesnap_form_commerce_store_form_submit(
+function commerce_bluesnap_form_commerce_bluesnap_settings_form_submit(
     $form,
     FormStateInterface $form_state
 ) {
