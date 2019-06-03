@@ -238,7 +238,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       ],
     ];
 
-    // Add bluesnap level2/3 data to transaction
+    // Add BlueSnap level2/3 data to transaction.
     $level_2_3_data = $this->enhancedData->getData(
       $payment->getOrder(),
       $payment_method->card_type->value
