@@ -35,12 +35,12 @@ class Config implements ConfigInterface {
 
     $form['status'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Enable BlueSnap level 2/3 data processing'),
+      '#title' => $this->t('Enable BlueSnap Enhanced data level processing'),
       '#default_value' => $settings ? $settings->status : FALSE,
     ];
     $form['level'] = [
       '#type' => 'radios',
-      '#title' => $this->t('Data processing level'),
+      '#title' => $this->t('Enhanced Data processing level'),
       '#options' => [
         self::LEVEL_2_ID => $this->t('Level 2'),
         self::LEVEL_3_ID => $this->t('Level 3'),
