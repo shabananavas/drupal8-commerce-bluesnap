@@ -234,7 +234,7 @@ class Data implements DataInterface {
    *   Order customer reference number.
    */
   protected function getCustomerReferenceNumber(OrderInterface $order) {
-    return $order->id();
+    return $order->getOrderNumber();
   }
 
   /**
