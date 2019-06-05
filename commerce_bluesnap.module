@@ -28,7 +28,7 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
           [
             ':configuration_link' => Url::fromUri(
               'internal:/admin/commerce/config/payment-gateways'
-            )->toString()
+            )->toString(),
           ]
         ) . '</li>';
       $output .= '</ul>';

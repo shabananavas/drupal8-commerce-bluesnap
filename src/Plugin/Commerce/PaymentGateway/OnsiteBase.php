@@ -2,50 +2,59 @@
 
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_bluesnap\ApiService;
-use Drupal\commerce_bluesnap\VaultedShopper;
+use Drupal\commerce_bluesnap\Api\ClientFactory;
 
-use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayInterface;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
+use Drupal\commerce_price\RounderInterface;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Psr\Log\LoggerInterface;
+
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Provides the bluesnap payment gateway base class.
  */
-abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaymentGatewayInterface, SupportsAuthorizationsInterface {
+abstract class OnsiteBase extends OnsitePaymentGatewayBase {
 
   /**
-   * The logger.
+   * The rounder.
    *
-   * @var \Psr\Log\LoggerInterface
+   * @var \Drupal\commerce_price\RounderInterface
    */
-  protected $logger;
+  protected $rounder;
 
   /**
-   * The Bluesnap API helper service.
+   * The BlueSnap API client factory.
    *
-   * @var \Drupal\commerce_bluesnap\ApiService
+   * @var \Drupal\commerce_bluesnap\Api\ClientFactory
    */
-  protected $apiService;
+  protected $clientFactory;
 
   /**
-   * The Bluesnap vaulted shopper helper service.
+   * Constructs a new PaymentGatewayBase object.
    *
-   * @var \Drupal\commerce_bluesnap\VaultedShopper
-   */
-  protected $vaultedShopper;
-
-  /**
-   * {@inheritdoc}
+   * @param array $configuration
+   *   A configuration array containing information about the plugin instance.
+   * @param string $plugin_id
+   *   The plugin_id for the plugin instance.
+   * @param mixed $plugin_definition
+   *   The plugin implementation definition.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The entity type manager.
+   * @param \Drupal\commerce_payment\PaymentTypeManager $payment_type_manager
+   *   The payment type manager.
+   * @param \Drupal\commerce_payment\PaymentMethodTypeManager $payment_method_type_manager
+   *   The payment method type manager.
+   * @param \Drupal\Component\Datetime\TimeInterface $time
+   *   The time.
+   * @param \Drupal\commerce_price\RounderInterface $rounder
+   *   The rounder service.
+   * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
+   *   The BlueSnap API client factory.
    */
   public function __construct(
     array $configuration,
@@ -55,9 +64,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
     PaymentTypeManager $payment_type_manager,
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
-    LoggerInterface $logger,
-    ApiService $api_service,
-    VaultedShopper $vaulted_shopper
+    RounderInterface $rounder,
+    ClientFactory $client_factory
   ) {
     parent::__construct(
       $configuration,
@@ -68,9 +76,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
       $payment_method_type_manager,
       $time
     );
-    $this->logger = $logger;
-    $this->apiService = $api_service;
-    $this->vaultedShopper = $vaulted_shopper;
+
+    $this->rounder = $rounder;
+    $this->clientFactory = $client_factory;
   }
 
   /**
@@ -90,9 +98,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
-      $container->get('commerce_bluesnap.logger'),
-      $container->get('commerce_bluesnap.api_service'),
-      $container->get('commerce_bluesnap.vaulted_shopper')
+      $container->get('commerce_price.rounder'),
+      $container->get('commerce_bluesnap.client_factory')
     );
   }
 
@@ -109,7 +116,10 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
   /**
    * {@inheritdoc}
    */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
+  public function buildConfigurationForm(
+    array $form,
+    FormStateInterface $form_state
+  ) {
     $form = parent::buildConfigurationForm($form, $form_state);
 
     $form['username'] = [
@@ -132,53 +142,111 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsitePaym
   /**
    * {@inheritdoc}
    */
-  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
+  public function submitConfigurationForm(
+    array &$form,
+    FormStateInterface $form_state
+  ) {
     parent::submitConfigurationForm($form, $form_state);
 
     if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
+
       $this->configuration['username'] = $values['username'];
       $this->configuration['password'] = $values['password'];
     }
   }
 
   /**
-   * {@inheritdoc}
+   * Returns the BlueSnap configuration for this payment gateway.
    *
-   * @todo Needs kernel test
+   * @return array
+   *   An array holding the BlueSnap configuration as required by the Client
+   *   Factory.
+   *   See \Drupal\commerce_bluesnap\Api\ClientFactory::init() for details.
    */
-  public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
-    $owner = $payment_method->getOwner();
-    // If there's no owner we won't be able to delete the remote payment method
-    // as we won't have a remote profile. Just delete the payment method locally
-    // in that case.
-    if (!$owner) {
-      $payment_method->delete();
-      return;
-    }
-    // Delete the local entity.
-    $payment_method->delete();
+  public function getBluesnapConfig() {
+    return [
+      'env' => $this->getEnvironment(),
+      'username' => $this->getUsername(),
+      'password' => $this->getPassword(),
+    ];
   }
 
   /**
    * Returns the environment for BlueSnap.
    */
-  public function getEnvironment() {
+  protected function getEnvironment() {
     return $this->getMode() === 'live' ? 'production' : 'sandbox';
   }
 
   /**
    * Returns the username.
    */
-  public function getUsername() {
+  protected function getUsername() {
     return $this->configuration['username'] ?: '';
   }
 
   /**
    * Returns the password.
    */
-  public function getPassword() {
+  protected function getPassword() {
     return $this->configuration['password'] ?: '';
+  }
+
+  /**
+   * Prepares the billing contact info from the billing profile.
+   *
+   * This is the format for the billing info added to a payment source.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   *
+   * @return array
+   *   Billing contact info in an array form as required by the Vaulted Shoppers
+   *   API.
+   */
+  protected function prepareBillingContactInfo(
+    PaymentMethodInterface $payment_method
+  ) {
+    $address = $payment_method->getBillingProfile()->get('address')->first();
+
+    return [
+      'firstName' => $address->getGivenName(),
+      'lastName' => $address->getFamilyName(),
+      'address1' => $address->getAddressLine1(),
+      'address2' => $address->getAddressLine2(),
+      'city' => $address->getLocality(),
+      'state' => $address->getAdministrativeArea(),
+      'zip' => $address->getPostalCode(),
+      'country' => $address->getCountryCode(),
+    ];
+  }
+
+  /**
+   * Prepares the billing contact info from the billing profile.
+   *
+   * This is the format for the billing info added to a vaulted shopper.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   *
+   * @return array
+   *   Billing contact info in an array form as required by the Vaulted Shoppers
+   *   API.
+   */
+  protected function prepareVaultedShopperBillingInfo(
+    PaymentMethodInterface $payment_method
+  ) {
+    $billing_info = $this->getBillingContactInfo($payment_method);
+
+    // Correct the difference in the address 1 property.
+    $billing_info['address'] = $billing_info['address1'];
+    unset($billing_info['address1']);
+
+    // Add the email as well.
+    $billing_info['email'] = $payment_method->getOwner()->getEmail();
+
+    return $billing_info;
   }
 
 }
