@@ -3,6 +3,7 @@
 namespace Drupal\commerce_bluesnap\FraudPrevention;
 
 use Drupal\commerce_store\Entity\StoreInterface;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
@@ -15,7 +16,8 @@ class KountAccount implements KountAccountInterface {
   /**
    * {@inheritdoc}
    */
-  public function buildSettingsForm(StoreInterface $store) {
+  public function buildSettingsForm(FormStateInterface $form_state) {
+    $store = $form_state->getFormObject()->getEntity();
     $form = [
       '#type' => 'details',
       '#title' => $this->t('Kount settings'),
