@@ -238,7 +238,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase {
   protected function prepareVaultedShopperBillingInfo(
     PaymentMethodInterface $payment_method
   ) {
-    $billing_info = $this->getBillingContactInfo($payment_method);
+    $billing_info = $this->prepareBillingContactInfo($payment_method);
 
     // Correct the difference in the address 1 property.
     $billing_info['address'] = $billing_info['address1'];
