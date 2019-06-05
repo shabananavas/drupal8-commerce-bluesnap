@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\commerce_bluesnap;
+namespace Drupal\commerce_bluesnap\FraudPrevention;
 
 /**
  * Interface to process fraud prevention in bluesnap transactions.
@@ -45,10 +45,13 @@ interface FraudSessionInterface {
    *
    * @param string $mode
    *   The bluesnap exchange rate API mode, test or production.
+   * @param int|null $kount_merchant_id
+   *   The Kount merchant Id, if we have one (enterprise accounts); NULL
+   *   otherwise.
    *
    * @return array
    *   Render array which has bluesnap device datacollector iframe markup.
    */
-  public function iframe($mode);
+  public function iframe($mode, $kount_merchant_id = NULL);
 
 }
