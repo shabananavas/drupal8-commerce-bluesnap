@@ -106,7 +106,7 @@ function commerce_bluesnap_form_alter(
     'commerce_bluesnap_form_commerce_bluesnap_settings_form_submit'
   );
 
-  // We need kount settings only in store entity
+  // We need kount settings only in store entity.
   if ($entity_type === 'commerce_store') {
     // Build the BlueSnap Kount settings form fields.
     $kount_account = \Drupal::service('commerce_bluesnap.kount_account');

@@ -44,6 +44,9 @@ class KountAccount implements KountAccountInterface {
   public function getSettings(StoreInterface $store) {
     $settings = $store->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
+    if (empty($settings->kount)) {
+      return;
+    }
 
     return $settings->kount;
   }
@@ -52,7 +55,12 @@ class KountAccount implements KountAccountInterface {
    * {@inheritdoc}
    */
   public function getMerchantId(StoreInterface $store) {
-    return $this->getSettings($store)->merchant_id;
+    $settings = $this->getSettings($store);
+    if (empty($settings)) {
+      return;
+    }
+
+    return $settings->merchant_id;
   }
 
 }
