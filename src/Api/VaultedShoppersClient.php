@@ -40,14 +40,20 @@ class VaultedShoppersClient implements VaultedShoppersClientInterface {
    * {@inheritdoc}
    */
   public function addCard($vaulted_shopper_id, array $data) {
-    return $this->addPaymentSources(['creditCardInfo' => [$data]]);
+    return $this->addPaymentSources(
+      $vaulted_shopper_id,
+      ['creditCardInfo' => [$data]]
+    );
   }
 
   /**
    * {@inheritdoc}
    */
   public function addEcp($vaulted_shopper_id, array $data) {
-    return $this->addPaymentSources(['ecpDetails' => [$data]]);
+    return $this->addPaymentSources(
+      $vaulted_shopper_id,
+      ['ecpDetails' => [$data]]
+    );
   }
 
   /**
