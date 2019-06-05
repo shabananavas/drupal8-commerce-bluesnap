@@ -1,96 +1,60 @@
 <?php
 
-namespace Drupal\commerce_bluesnap;
+namespace Drupal\commerce_bluesnap\EnhancedDataLevel;
 
-use Drupal\commerce_store\Entity\StoreInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
 
 /**
- * Bluesnap data level service class.
+ * Bluesnap enhanced data class.
  *
  * Bluesnap's Enhanced data levels, such as Level 2 and Level 3,
  * require extra information to process the transaction .
- * This service provides a settings form to configure the data
- * level in store and methods for getting
+ * This service provides methods for getting
  * level 2 or level 3 data depending on the
- * card type and store settings.
+ * card type and store/product variation settings.
  */
-class DataLevelService implements DataLevelServiceInterface {
-
-  use StringTranslationTrait;
+class Data implements DataInterface {
 
   /**
-   * {@inheritdoc}
+   * The BlueSnap enhanced data config.
+   *
+   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface
    */
-  public function buildSettingsForm(StoreInterface $store) {
-    $form = [];
-
-    // Get bluesnap data level settings.
-    $settings = $this->getSettings($store);
-
-    $form['settings'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Data level settings'),
-      '#open' => TRUE,
-    ];
-    $form['settings']['status'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable bluesnap level 2/3 data processing'),
-      '#default_value' => $settings ? $settings->status : '0',
-    ];
-    $form['settings']['type'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('Bluesnap data processing level'),
-      '#options' => [
-        'level_2' => $this->t('Level 2'),
-        'level_3' => $this->t('Level 3'),
-      ],
-      '#states' => [
-        'visible' => [
-          ':input[name="bluesnap[data_level][settings][status]"]' => [
-            'checked' => TRUE,
-          ],
-        ],
-      ],
-      '#default_value' => $settings ? $settings->type : 'level_2',
-    ];
-
-    return $form;
-  }
+  protected $config;
 
   /**
-   * {@inheritdoc}
+   * Constructs a new blueSnap enhanced data object.
+   *
+   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface $config
+   *   The BlueSnap enhanced data config.
    */
-  public function getSettings(StoreInterface $store) {
-    $settings = $store->get('bluesnap_settings')->value;
-    $settings = json_decode($settings);
-
-    return $settings->data_level->settings;
+  public function __construct(ConfigInterface $config) {
+    $this->config = $config;
   }
 
   /**
    * {@inheritdoc}
    */
   public function getData(OrderInterface $order, $card_type) {
-    $store = $order->getStore();
     $output = [];
 
-    // Get data level settings for store.
-    $settings = $this->getSettings($store);
-    if (!($settings->status)) {
+    // Get the blueSnap enhanced data level.
+    // Proceed only if enhanced data is set in either store
+    // or product variation config.
+    $data_level = $this->dataLevel($order);
+    if (!($data_level)) {
       return $output;
     }
 
-    // Check the data level setting and
-    // return level2 or level3 data.
-    $data_type = $settings->type;
-    if ($data_type == 'level_3' && in_array($card_type, $this->getCardSupportLevel3())) {
+    // Build and return the data depending on the configured level.
+    $is_level_3 = $data_level === ConfigInterface::LEVEL_3_ID;
+    if ($is_level_3 && $this->cardTypeSupportsLevel3($card_type)) {
       $output['level3Data'] = $this->level3Data($order, $card_type);
       return $output;
     }
-    if ($data_type == 'level_2' && in_array($card_type, $this->getCardSupportLevel2())) {
+    $is_level_2 = $data_level === ConfigInterface::LEVEL_2_ID;
+    if ($is_level_2 && $this->cardTypeSupportsLevel2($card_type)) {
       $output['level2Data'] = $this->level2Data($order, $card_type);
       return $output;
     }
@@ -99,32 +63,90 @@ class DataLevelService implements DataLevelServiceInterface {
   }
 
   /**
-   * Provides the card types which supports data level 3.
+   * Returns data level if enhanced data is set, FALSE otherwise.
+   *
+   * For a given order, checks whether the enhanced data is
+   * set in store level. Store level setting takes priority over
+   * SKU level setting, hence the enhanced data status will be
+   * considered as true for the order if it is set in store level.
+   * If enhanced data is not set in store level
+   * we loop through each product in the order to see if there is atleast
+   * one product which have enhanced data set.
+   * If yes enhanced data status will beconsidered
+   * as true for the entire order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object for which we are checking the enhanced data status.
+   *
+   * @return int|bool
+   *   data level if enhanced data is set for the order, FALSE otherwise.
+   */
+  protected function dataLevel(OrderInterface $order) {
+    $store = $order->getStore();
+    // Get enhanced data settings for the store.
+    $settings = $this->config->getSettings($store);
+
+    if ($settings->status) {
+      return $settings->level;
+    }
+
+    // If enhanced data level is turned off in store,
+    // we iterate through each product to see
+    // if anyone of the product in the order has
+    // enhanced data level turned on.
+    foreach ($order->getItems() as $order_item) {
+      if (!($order_item->hasPurchasedEntity())) {
+        continue;
+      }
+
+      $purchased_entity = $order_item->getPurchasedEntity();
+
+      // Get enhanced data settings for product.
+      $settings = $this->config->getSettings($purchased_entity);
+      if (!($settings->status)) {
+        continue;
+      }
+
+      $data_level = $settings->level;
+      return $data_level;
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Returns whether the given card type supports data level 3.
+   *
+   * @param string $card_type
+   *   The card type to check.
    *
    * @return array
    *   Array of level 3 supported card types.
    */
-  protected function getCardSupportLevel3() {
-    return ['mastercard', 'visa'];
+  protected function cardTypeSupportsLevel3($card_type) {
+    return in_array($card_type, ['mastercard', 'visa']);
   }
 
   /**
-   * Provides the card types which supports data level 2.
+   * Returns whether the given card type supports data level 2.
+   *
+   * @param string $card_type
+   *   The card type to check.
    *
    * @return array
    *   Array of level 2 supported card types.
    */
-  protected function getCardSupportLevel2() {
-    return ['mastercard', 'visa', 'amex'];
+  protected function cardTypeSupportsLevel2($card_type) {
+    return in_array($card_type, ['mastercard', 'visa', 'amex']);
   }
 
   /**
-   * Provides bluesnap level2 data for transaction processing.
+   * Prepares the Level 2 data for transaction processing.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
-   *   Order object.
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object for which we are preparing the data.
    * @param string $card_type
-   *   The card type.
+   *   The type of the card used for the transaction.
    *
    * @return array
    *   Array of level 2 data.
@@ -145,22 +167,21 @@ class DataLevelService implements DataLevelServiceInterface {
       $data['destinationZipCode'] = $shipping_info['destinationZipCode'];
     }
 
-    // This is an Amex-specific
-    // level that contains item data (such as item description and quantity)
-    // in addition to Level 2 fields. Only lineItemTotal, description,
-    // itemQuantity are required.
+    // This is an Amex-specific level that contains item data (such as item
+    // description and quantity) in addition to Level 2 fields. Only
+    // lineItemTotal, description, itemQuantity are required.
     $data['level3DataItem'] = $this->level3DataItems($order, $card_type);
 
     return $data;
   }
 
   /**
-   * Provides bluesnap level3 data for transaction processing.
+   * Prepares the Level 2 data for transaction processing.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
-   *   Order object.
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order object for which we are preparing the data.
    * @param string $card_type
-   *   The card type.
+   *   The type of the card used for the transaction.
    *
    * @return array
    *   Array of level 3 data.
@@ -190,7 +211,7 @@ class DataLevelService implements DataLevelServiceInterface {
     }
 
     $shipping_info = $this->getShippingInfo($order);
-    if (!empty($shipping_info)) {
+    if ($shipping_info) {
       $data = $data + $shipping_info;
     }
 
@@ -202,7 +223,11 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides the reference number used by shopper to track order.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   * We use the order ID for that purpose. We could/should be using the order
+   * number, but there is a limitation of 17 characters and the order number
+   * might exceed that limit if it is customized; the order ID wouldn't.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    *
    * @return string
@@ -215,7 +240,7 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides order adjustment total amount.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    * @param string $type
    *   Adjustment type.
@@ -236,7 +261,7 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides sum of tax rates associated with an order.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    *
    * @return int|null
@@ -245,7 +270,7 @@ class DataLevelService implements DataLevelServiceInterface {
   protected function getOrderTaxRate(OrderInterface $order) {
     $tax_adjustments = $order->collectAdjustments(['tax']);
 
-    if (empty($tax_adjustments)) {
+    if (!$tax_adjustments) {
       return;
     }
 
@@ -255,21 +280,29 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides shipping country code and zip code.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    *
    * @return array|null
    *   Array of shipping country and zip code, null if no shipping info.
    */
   protected function getShippingInfo(OrderInterface $order) {
+    // Nothing to do if the order does not have shipments.
     if (!$order->hasField('shipments')) {
+      return;
+    }
+    $shipments_field = $order->get('shipments');
+    if ($shipments_field->isEmpty()) {
       return;
     }
 
     $data = [];
 
-    foreach ($order->get('shipments')->referencedEntities() as $shipment) {
-      $shipping_profile = $shipment->getShippingProfile()->get('address')->first();
+    foreach ($shipments_field->referencedEntities() as $shipment) {
+      $shipping_profile = $shipment->getShippingProfile()
+        ->get('address')
+        ->first();
+
       $data['destinationZipCode'] = $shipping_profile->getPostalCode();
       $data['destinationCountryCode'] = $shipping_profile->getCountryCode();
     }
@@ -278,9 +311,9 @@ class DataLevelService implements DataLevelServiceInterface {
   }
 
   /**
-   * Provides bluesnap level3 data items for transaction processing.
+   * Provides BlueSnap level 3 data items for transaction processing.
    *
-   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   Order object.
    * @param string $card_type
    *   The card type.
@@ -296,7 +329,7 @@ class DataLevelService implements DataLevelServiceInterface {
       $output[$key] = $this->getBasicDataItems($order_item);
 
       // For amex cards only basic data items are required.
-      if ($card_type == 'amex') {
+      if ($card_type === 'amex') {
         continue;
       }
 
@@ -309,9 +342,9 @@ class DataLevelService implements DataLevelServiceInterface {
   }
 
   /**
-   * Provides basic bluesnap level3 data items for transaction processing.
+   * Provides basic BlueSnap level 3 data items for transaction processing.
    *
-   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order object.
    *
    * @return array
@@ -329,7 +362,7 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides order item total excluding the tax and promotion adjustment.
    *
-   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order item object.
    *
    * @return int
@@ -340,9 +373,9 @@ class DataLevelService implements DataLevelServiceInterface {
 
     // Subtract the tax and promotion adjustments from line item total
     // if they are included in base price.
-    foreach ($order_item->getAdjustments(['tax', 'promotion']) as $tax) {
-      if ($tax->isIncluded()) {
-        $total_price = $total_price->subtract($tax->getAmount());
+    foreach ($order_item->getAdjustments(['tax', 'promotion']) as $adjustment) {
+      if ($adjustment->isIncluded()) {
+        $total_price = $total_price->subtract($adjustment->getAmount());
       }
     }
 
@@ -350,21 +383,19 @@ class DataLevelService implements DataLevelServiceInterface {
   }
 
   /**
-   * Provides bluesnap level3 data items for transaction processing.
+   * Provides BlueSnap level 3 data items for transaction processing.
    *
-   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order object.
    *
    * @return array
    *   Array of level 3 data items.
    */
   protected function getDataItems(OrderItemInterface $order_item) {
-
     $output['unitCost'] = $order_item->getUnitPrice()->getNumber();
 
     // Purchased product data.
     $purchased_entity = $order_item->getPurchasedEntity();
-    $output['commodityCode'] = $purchased_entity->getSku();
     $output['productCode'] = $purchased_entity->getSku();
 
     // Discount amount applied to transaction.
@@ -372,8 +403,8 @@ class DataLevelService implements DataLevelServiceInterface {
     if ($promotion) {
       $output['discountAmount'] = -($promotion);
 
-      // Set discount indicator as no, as the total line item
-      // cost we pass is not discounted value.
+      // Set discount indicator to No, as the total line item cost we pass is
+      // not discounted value.
       $output['discountIndicator'] = 'N';
     }
 
@@ -399,7 +430,7 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides order item adjustment total amount.
    *
-   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order item object.
    * @param string $type
    *   Adjustment type.
@@ -409,7 +440,7 @@ class DataLevelService implements DataLevelServiceInterface {
    */
   protected function getOrderItemAdjustment(OrderItemInterface $order_item, $type) {
     $adjustments = $order_item->getAdjustments([$type]);
-    if (empty($adjustments)) {
+    if (!$adjustments) {
       return;
     }
 
@@ -419,7 +450,7 @@ class DataLevelService implements DataLevelServiceInterface {
   /**
    * Provides sum of tax rates associated with an order item.
    *
-   * @param Drupal\commerce_order\Entity\OrderItemInterface $order_item
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $order_item
    *   Order object.
    *
    * @return int|null
@@ -428,7 +459,7 @@ class DataLevelService implements DataLevelServiceInterface {
   protected function getOrderItemTaxRate(OrderItemInterface $order_item) {
     $adjustments = $order_item->getAdjustments(['tax']);
 
-    if (empty($adjustments)) {
+    if (!$adjustments) {
       return;
     }
 
@@ -467,7 +498,7 @@ class DataLevelService implements DataLevelServiceInterface {
    *   Array of adjustments.
    *
    * @return int
-   *   Sum of tax rates.
+   *   Sum of tax rates, NULL if no percentage tax found
    */
   protected function getTaxRateTotal(array $adjustments) {
     $total_tax_rate = NULL;
@@ -475,6 +506,15 @@ class DataLevelService implements DataLevelServiceInterface {
     // Loop through each tax adjustment to get the total
     // tax rate.
     foreach ($adjustments as $tax) {
+      $percentage = $tax->getPercentage();
+
+      // If even just one tax adjustment is not calculated as a percentage, then
+      // the whole tax is not considered a percentage. Do not pass the tax rate
+      // property to BlueSnap.
+      if ($percentage === NULL) {
+        return NULL;
+      }
+
       $total_tax_rate += $tax->getPercentage();
     }
 

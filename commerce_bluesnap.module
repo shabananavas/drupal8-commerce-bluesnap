@@ -6,6 +6,7 @@
  */
 
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -42,8 +43,11 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
 /**
  * Implements hook_entity_base_field_info().
  */
-function commerce_bluesnap_entity_base_field_info(EntityTypeInterface $entity_type) {
-  if ($entity_type->id() !== 'commerce_store') {
+function commerce_bluesnap_entity_base_field_info(
+    EntityTypeInterface $entity_type
+) {
+  if ($entity_type->id() !== 'commerce_store'
+    && $entity_type->id() !== 'commerce_product_variation') {
     return;
   }
 
@@ -63,15 +67,26 @@ function commerce_bluesnap_entity_base_field_info(EntityTypeInterface $entity_ty
 }
 
 /**
- * Implements hook_form_BASE_FORM_ID_alter().
+ * Implements hook_form_alter().
  */
-function commerce_bluesnap_form_commerce_store_form_alter(
+function commerce_bluesnap_form_alter(
   &$form,
   FormStateInterface $form_state,
   $form_id
 ) {
-  /** @var \Drupal\commerce_store\Entity\StoreInterface $store */
-  $store = $form_state->getFormObject()->getEntity();
+  // Early return if we are not dealing with a entity form.
+  $form_object = $form_state->getFormObject();
+  if (!($form_object instanceof EntityFormInterface)) {
+    return;
+  }
+
+  // We are currently interested only in product variation
+  // and store entity types.
+  $entity_type = $form_object->getEntity()->getEntityTypeId();
+  if ($entity_type != 'commerce_product_variation' &&
+    $entity_type != 'commerce_store') {
+    return;
+  }
 
   // Add a form wrapper element for bluesnap settings.
   $form['bluesnap'] = [
@@ -81,25 +96,34 @@ function commerce_bluesnap_form_commerce_store_form_alter(
     '#tree' => TRUE,
   ];
 
-  // Build the bluesnap data level settings form fields.
-  $data_level_service = \Drupal::service('commerce_bluesnap.data_level_service');
-  $form['bluesnap']['data_level'] = $data_level_service->buildSettingsForm($store);
+  // Build the BlueSnap data level settings form fields.
+  $enhanced_data_config = \Drupal::service('commerce_bluesnap.enhanced_data_config');
+  $form['bluesnap']['data_level'] = $enhanced_data_config->buildSettingsForm($form_state);
 
-  // Build the BlueSnap Kount settings form fields.
-  $kount_account = \Drupal::service('commerce_bluesnap.kount_account');
-  $form['bluesnap']['kount'] = $kount_account->buildSettingsForm($store);
+  // Execute our submit handler first.
+  array_unshift(
+    $form['actions']['submit']['#submit'],
+    'commerce_bluesnap_form_commerce_bluesnap_settings_form_submit'
+  );
 
-  $form['actions']['submit']['#submit'][] = 'commerce_bluesnap_form_commerce_store_form_submit';
+  // We need kount settings only in store entity
+  if ($entity_type === 'commerce_store') {
+    // Build the BlueSnap Kount settings form fields.
+    $kount_account = \Drupal::service('commerce_bluesnap.kount_account');
+    $form['bluesnap']['kount'] = $kount_account->buildSettingsForm($form_state);
+  }
 }
 
 /**
- * Form submit for the commerce_store entity form.
+ * Form submit for the blueSnap settings form.
  */
-function commerce_bluesnap_form_commerce_store_form_submit($form, FormStateInterface $form_state) {
+function commerce_bluesnap_form_commerce_bluesnap_settings_form_submit(
+    $form,
+    FormStateInterface $form_state
+) {
   $bluesnap = $form_state->getValue('bluesnap');
 
   // Save blueSnap settings as json encoded string.
   $store = $form_state->getFormObject()->getEntity();
   $store->set('bluesnap_settings', json_encode($bluesnap));
-  $store->save();
 }
