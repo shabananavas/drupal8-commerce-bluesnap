@@ -2,8 +2,10 @@
 
 namespace Drupal\Tests\commerce_bluesnap\Unit;
 
-use Drupal\address\Plugin\Field\FieldType\AddressItem;
 use Drupal\commerce_bluesnap\EnhancedDataLevel\Data;
+use Drupal\commerce_bluesnap\Tests\Mocks\MockAdjustment;
+
+use Drupal\address\Plugin\Field\FieldType\AddressItem;
 use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 
@@ -55,6 +57,16 @@ class DataTest extends UnitTestCase {
     $ref_level_2_data->setAccessible(TRUE);
     $this->level_2_data = $ref_level_2_data;
 
+    // Use reflection to make level3Data() public.
+    $ref_level_3_data = new \ReflectionMethod($this->data, 'level3Data');
+    $ref_level_3_data->setAccessible(TRUE);
+    $this->level_3_data = $ref_level_3_data;
+
+    // Use reflection to make level3DataItems() public.
+    $ref_level_3_data_items = new \ReflectionMethod($this->data, 'level3DataItems');
+    $ref_level_3_data_items->setAccessible(TRUE);
+    $this->level_3_data_items = $ref_level_3_data_items;
+
     // Mock order object.
     $order_items[] = $this->mockOrderItems();
     $this->order = $this->mockOrder($order_items);
@@ -68,6 +80,8 @@ class DataTest extends UnitTestCase {
   public function testLevel2DataMasterCard() {
     // Expected output for mastercard.
     $expected_output = ['customerReferenceNumber' => 'W0133934'];
+
+    // Actual output.
     $actual_output = $this->level_2_data
       ->invokeArgs($this->data, [$this->order, 'mastercard']);
 
@@ -88,14 +102,84 @@ class DataTest extends UnitTestCase {
         '0' => [
           'lineItemTotal' => '101.9',
           'description' => 'T-shirt (red, small)',
-          'itemQuantity' => '2',
+          'itemQuantity' => '2.00',
         ],
       ],
     ];
+
+    // Actual output for amex card.
     $actual_output = $this->level_2_data
       ->invokeArgs($this->data, [$this->order, 'amex']);
 
     // Call level2Data() on the data class.
+    $this->assertEquals($expected_output, $actual_output);
+  }
+
+  /**
+   * Tests the level3DataItems function for a master card.
+   *
+   * ::covers level3DataItems.
+   */
+  public function testlevel3DataItemsMaster() {
+    // Expected output for master card.
+    $expected_output = [
+      '0' => [
+        'lineItemTotal' => '101.9',
+        'description' => 'T-shirt (red, small)',
+        'itemQuantity' => '2.00',
+        'unitCost' => '50.950000',
+        'productCode' => '2728',
+        'discountAmount' => '10',
+        'discountIndicator' => 'N',
+        'taxAmount' => '6.1',
+        'grossNetIndicator' => 'N',
+        'taxRate' => '0.06',
+      ],
+    ];
+
+    // Actual output for master card.
+    $actual_output = $this->level_3_data_items
+      ->invokeArgs($this->data, [$this->order, 'mastercard']);
+
+    // Call level3DataItems() on the data class.
+    $this->assertEquals($expected_output, $actual_output);
+  }
+
+  /**
+   * Tests the level3Data function for a master card.
+   *
+   * ::covers level3Data.
+   */
+  public function testlevel3DataMaster() {
+    // Expected output for master card.
+    // We have not added order level discount or tax,
+    // hence those info should not be there in the output.
+    $expected_output = [
+      'freightAmount' => '10',
+      'customerReferenceNumber' => 'W0133934',
+      'destinationZipCode' => '33634-6308',
+      'destinationCountryCode' => 'us',
+      'level3DataItems' => [
+        '0' => [
+          'lineItemTotal' => '101.9',
+          'description' => 'T-shirt (red, small)',
+          'itemQuantity' => '2.00',
+          'unitCost' => '50.950000',
+          'productCode' => '2728',
+          'discountAmount' => '10',
+          'discountIndicator' => 'N',
+          'taxAmount' => '6.1',
+          'grossNetIndicator' => 'N',
+          'taxRate' => '0.06',
+        ],
+      ]
+    ];
+
+    // Actual output for master card.
+    $actual_output = $this->level_3_data
+      ->invokeArgs($this->data, [$this->order, 'mastercard']);
+
+    // Call level3DataItems() on the data class.
     $this->assertEquals($expected_output, $actual_output);
   }
 
@@ -112,9 +196,68 @@ class DataTest extends UnitTestCase {
     $order->getEmail()->willReturn('wq9n918s3gq187k@marketplace.amazon.com');
     $order->getItems()->willReturn($order_items);
     $order->hasField('shipments')->willReturn(TRUE);
-    $order->getPlacedTime()->willReturn(1529255747);
+    $order->getPlacedTime()->willReturn('1529255747');
     $order->getOrderNumber()->willReturn('W0133934');
+
+    // Adjustments.
+    $adjustments['shipping'] = [
+      'type' => 'promotion',
+      'amount' => new Price('10', 'USD'),
+      'isIncluded' => FALSE,
+    ];
+    $order->collectAdjustments(["shipping"])->willReturn($this->mockAdjustment($adjustments['shipping']));
+    $order->collectAdjustments(["tax"])->willReturn([]);
+    $order->collectAdjustments(["promotion"])->willReturn([]);
+
     return $order->reveal();
+  }
+
+  /**
+   * Returns mock adjustments for the given data.
+   *
+   * @param array $adjustments
+   *   The adjustment' data.
+   *
+   * @return \Drupal\commerce_bluesnap\Tests\Mocks\MockAdjustment[]
+   *   The adjustment mock objects.
+   */
+  protected function mockAdjustments(array $adjustments) {
+    $mock_adjustments = [];
+
+    foreach ($adjustments as $adjustment) {
+      $mock_adjustment = $this->prophesize(MockAdjustment::class);
+      $mock_adjustment->getAmount()->willReturn($adjustment['amount']);
+      if (!empty($adjustment['percentage'])) {
+        $mock_adjustment->getPercentage()->willReturn($adjustment['percentage']);
+      }
+      $mock_adjustment->isIncluded()->willReturn($adjustment['isIncluded']);
+
+      $mock_adjustments[] = $mock_adjustment->reveal();
+    }
+
+    return $mock_adjustments;
+  }
+
+  /**
+   * Returns mock adjustment for the given data.
+   *
+   * @param array $adjustment
+   *   The adjustment' data.
+   *
+   * @return \Drupal\commerce_bluesnap\Tests\Mocks\MockAdjustment
+   *   The adjustment mock object.
+   */
+  protected function mockAdjustment(array $adjustment) {
+    $mock_adjustment = $this->prophesize(MockAdjustment::class);
+    $mock_adjustment->getAmount()->willReturn($adjustment['amount']);
+    if (!empty($adjustment['percentage'])) {
+      $mock_adjustment->getPercentage()->willReturn($adjustment['percentage']);
+    }
+    $mock_adjustment->isIncluded()->willReturn($adjustment['isIncluded']);
+
+    $mock_adjustments[] = $mock_adjustment->reveal();
+
+    return $mock_adjustments;
   }
 
   /**
@@ -266,10 +409,24 @@ class DataTest extends UnitTestCase {
     $order_item->getPurchasedEntity()->willReturn($purchased_entity);
     $order_item->getUnitPrice()->willReturn(new Price('50.950000', 'USD'));
     $order_item->getQuantity()->willReturn('2.00');
-    $order_item->getTotalPrice()->willReturn(new Price('101.9', 'USD'));
+    $order_item->getTotalPrice()->willReturn(new Price('98', 'USD'));
 
-    // Cannot test with Adjustments as adjustments are declared as final class.
-    $order_item->getAdjustments(['tax', 'promotion'])->willReturn([]);
+    // Tax and promotion Adjustments.
+    $adjustments['tax'] = [
+      'type' => 'tax',
+      'amount' => new Price('6.1', 'USD'),
+      'percentage' => '0.06',
+      'isIncluded' => TRUE,
+    ];
+    $adjustments['promotion'] = [
+      'type' => 'promotion',
+      'amount' => new Price('-10', 'USD'),
+      'isIncluded' => TRUE,
+    ];
+
+    $order_item->getAdjustments(['tax', 'promotion'])->willReturn($this->mockAdjustments($adjustments));
+    $order_item->getAdjustments(["tax"])->willReturn($this->mockAdjustment($adjustments['tax']));
+    $order_item->getAdjustments(["promotion"])->willReturn($this->mockAdjustment($adjustments['promotion']));
 
     return $order_item->reveal();
   }
