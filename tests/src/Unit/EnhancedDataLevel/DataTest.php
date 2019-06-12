@@ -205,6 +205,7 @@ class DataTest extends UnitTestCase {
       'amount' => new Price('10', 'USD'),
       'isIncluded' => FALSE,
     ];
+
     $order->collectAdjustments(["shipping"])->willReturn($this->mockAdjustment($adjustments['shipping']));
     $order->collectAdjustments(["tax"])->willReturn([]);
     $order->collectAdjustments(["promotion"])->willReturn([]);
@@ -350,6 +351,7 @@ class DataTest extends UnitTestCase {
 
     $profile_details->isEmpty()->willReturn(FALSE);
     $profile_details->first()->willReturn($address_item->reveal());
+
     return $profile_details->reveal();
   }
 
