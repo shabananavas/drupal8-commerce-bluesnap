@@ -367,10 +367,6 @@ class DataTest extends UnitTestCase {
     $number_string->getString()->willReturn('114-8760622-4326602');
     $number_field->first()->willReturn($number_string->reveal());
 
-    $payment_method->bundle()->willReturn('usi_purchase_order');
-    $payment_method->get('purchase_order_number')
-      ->willReturn($number_field->reveal());
-
     $payment_method_ref = $this->prophesize(EntityReference::class);
     $payment_method_ref->getValue()->willReturn($payment_method->reveal());
 
