@@ -191,11 +191,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    $result = $this->blueSnapTransaction($payment, $capture);
+    $result_id = $this->blueSnapTransaction($payment, $capture);
 
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
-    $payment->setRemoteId($result->id);
+    $payment->setRemoteId($result_id);
     $payment->save();
 
     // Fraud session IDs are specific to a payment. Remove the current ID so
@@ -568,8 +568,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
    *   Whether the created payment should be captured (VS authorized only).
    *   Allowed to be FALSE only if the plugin supports authorizations.
    *
-   * @return array
-   *   The response returned from BlueSnap.
+   * @return int
+   *   The BlueSnap response ID.
    */
   protected function blueSnapTransaction(PaymentInterface $payment, $capture) {
     $order = $payment->getOrder();
@@ -580,6 +580,9 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         SubscriptionClientInterface::API_ID,
         $this->getBluesnapConfig()
       );
+
+      $result = $client->create($this->transactionData($payment, $capture));
+      return $result->subscriptionId;
     }
     // If not a recurring order use card transactions API.
     else {
@@ -587,10 +590,12 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
         TransactionsClientInterface::API_ID,
         $this->getBluesnapConfig()
       );
-    }
-    $result = $client->create($this->transactionData($payment, $capture));
 
-    return $result;
+      $result = $client->create($this->transactionData($payment, $capture));
+      return $result->id;
+    }
+
+    return FALSE;
   }
 
   /**
@@ -747,6 +752,24 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     if ($this->moduleHandler->moduleExists('commerce_recurring')
       && $order->bundle() == 'recurring') {
       return TRUE;
+    }
+
+    // If order bundle is not recurring, then we have to loop through
+    // each product to see if there exists a product with subscription enabled
+    foreach ($order->getItems() as $order_item) {
+      $purchased_entity = $order_item->getPurchasedEntity();
+      if ($purchased_entity && !$purchased_entity->hasField('subscription_type')) {
+        continue;
+      }
+
+      // Can be considered as a subsscripton order if it has atleast one
+      // product which has subscription enabled.
+      $subscription_type_item = $purchased_entity->get('subscription_type');
+      $billing_schedule_item = $purchased_entity->get('billing_schedule');
+      if (!($subscription_type_item->isEmpty()) || !($billing_schedule_item->isEmpty())) {
+        return TRUE;
+      }
+
     }
 
     return FALSE;
