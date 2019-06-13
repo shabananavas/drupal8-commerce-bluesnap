@@ -57,6 +57,9 @@ class ClientFactory {
       case AltTransactionsClientInterface::API_ID:
         return new AltTransactionsClient($this->logger);
 
+      case SubscriptionClientInterface::API_ID:
+        return new SubscriptionClient($this->logger);
+
       default:
         throw new \InvalidArgumentException(
           sprintf('Unsupported API "%s"', $api)
