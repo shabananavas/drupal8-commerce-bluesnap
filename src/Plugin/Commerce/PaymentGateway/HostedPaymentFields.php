@@ -4,6 +4,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
+use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\FraudSessionInterface;
 
@@ -698,6 +699,10 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $capture
   ) {
     $payment_method = $payment->getPaymentMethod();
+
+    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
+    $address = $payment_method->getBillingProfile()->get('address')->first();
+
     $amount = $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
@@ -717,8 +722,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     }
     // If this is an anonymous user, send the payerinfo..
     else {
-      /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
-      $address = $payment_method->getBillingProfile()->get('address')->first();
       // First and last name are required.
       $transaction_data['payerInfo'] = $payer_info;
     }
@@ -787,8 +790,8 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     AddressInterface $address
   ) {
     return [
-      'billingContactInfo' => $billing_info,
-      'pfToken' => $payment_details['bluesnap_token'],
+      'billingContactInfo' => $this->payerInfo($address),
+      'pfToken' => $payment_method->getRemoteId(),
     ];
   }
 
