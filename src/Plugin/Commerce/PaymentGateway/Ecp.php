@@ -251,11 +251,20 @@ class Ecp extends OnsiteBase {
   ) {
     // Prepare the data for the request.
     $data = $this->prepareVaultedShopperBillingInfo($payment_method);
+
+    // ECP data.
     $ecp_data = $this->prepareEcpDetails(
       $payment_method,
       $payment_details
     );
     $data['paymentSources']['ecpDetails'] = [$ecp_data];
+
+    // We pass the Drupal user ID as the merchant shopper ID, only for
+    // authenticated users.
+    $owner = $payment_method->getOwner();
+    if ($owner->isAuthenticated()) {
+      $data['merchantShopperId'] = $payment_method->getOwner()->id();
+    }
 
     // Create and return the vaulted shopper.
     $client = $this->clientFactory->get(
