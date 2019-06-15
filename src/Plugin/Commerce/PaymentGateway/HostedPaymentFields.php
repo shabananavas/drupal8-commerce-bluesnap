@@ -233,6 +233,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $this->getBluesnapConfig()
     );
     $result = $client->create($transaction_data);
+
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
     $payment->setRemoteId($result->id);

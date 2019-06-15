@@ -40,22 +40,20 @@ class VaultedShoppersClient implements VaultedShoppersClientInterface {
    * {@inheritdoc}
    */
   public function addCard($vaulted_shopper_id, array $data) {
-    // Fetch the vaulted shopper and add the card details.
-    $vaulted_shopper = $this->get($vaulted_shopper_id);
-    $vaulted_shopper->paymentSources = [
-      'creditCardInfo' => [
-        $data,
-      ],
-    ];
+    return $this->addPaymentSources(
+      $vaulted_shopper_id,
+      ['creditCardInfo' => [$data]]
+    );
+  }
 
-    // Update the vaulted shopper on BlueSnap with the new card.
-    $response = VaultedShopper::update($vaulted_shopper_id, $vaulted_shopper);
-
-    if ($response->succeeded()) {
-      return $response->data;
-    }
-
-    throw new HardDeclineException('Unable to verify the credit card: ' . $response->data);
+  /**
+   * {@inheritdoc}
+   */
+  public function addEcp($vaulted_shopper_id, array $data) {
+    return $this->addPaymentSources(
+      $vaulted_shopper_id,
+      ['ecpDetails' => [$data]]
+    );
   }
 
   /**
@@ -94,6 +92,38 @@ class VaultedShoppersClient implements VaultedShoppersClientInterface {
     }
 
     return $response->data;
+  }
+
+  /**
+   * Adds new payment sources to an existing vaulted shopper on BlueSnap.
+   *
+   * @param int $vaulted_shopper_id
+   *   The vaulted shopper ID.
+   * @param array $payment_sources
+   *   An array of payment source data to pass to BlueSnap.
+   *
+   * @return array
+   *   The response returned from BlueSnap.
+   *
+   * @throws \Drupal\commerce_payment\Exception\HardDeclineException
+   *   When adding the payment sources fails.
+   */
+  protected function addPaymentSources(
+    $vaulted_shopper_id,
+    array $payment_sources
+  ) {
+    // Fetch the vaulted shopper and add the payment source details.
+    $vaulted_shopper = $this->get($vaulted_shopper_id);
+    $vaulted_shopper->paymentSources = $payment_sources;
+
+    // Update the vaulted shopper on BlueSnap with the new card.
+    $response = VaultedShopper::update($vaulted_shopper_id, $vaulted_shopper);
+
+    if ($response->succeeded()) {
+      return $response->data;
+    }
+
+    throw new HardDeclineException('Unable to verify the payment method details: ' . $response->data);
   }
 
 }
