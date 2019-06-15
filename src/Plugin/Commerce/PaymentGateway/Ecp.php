@@ -4,8 +4,8 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\AltTransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
+use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 
 /**
  * Provides the Bluesnap ACH/ECP payment gateway.
@@ -30,62 +30,19 @@ class Ecp extends OnsiteBase {
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    $amount = $payment->getAmount();
-    $amount = $this->rounder->round($amount);
+    // Prepare the data required to process an ACH/ECP transaction.
+    $data = $this->prepareTransactionData($payment, $payment_method, $amount);
 
-    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
-    $address = $payment_method->getBillingProfile()->get('address')->first();
-
-    // Information required to process an ACH/ECP transaction.
-    $transaction_data = [
-      'currency' => $amount->getCurrencyCode(),
-      'amount' => $amount->getNumber(),
-      'authorizedByShopper' => TRUE,
-      'transactionMetadata' => [
-        'metaData' => [
-          [
-            'metaKey' => 'order_id',
-            'metaValue' => $payment->getOrderId(),
-            'metaDescription' => 'The transaction\'s order ID.',
-          ],
-          [
-            'metaKey' => 'store_id',
-            'metaValue' => $payment->getOrder()->getStoreId(),
-            'metaDescription' => 'The transaction\'s store ID.',
-          ],
-        ],
-      ],
-    ];
-
-    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
-    // the payment data. The payment method is already added to the shopper,
-    // hence we only have to send the last 5 digits of account and routing
-    // number.
+    // We create Vaulted Shoppers for both authenticated and anonymous. For
+    // authenticated users we store the Vaulted Shopper ID as the user's remote
+    // ID, while for anonymous users we store it as the payment method's remote
+    // ID.
     $owner = $payment_method->getOwner();
-    if ($owner && $owner->isAuthenticated()) {
-      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-      $transaction_data['ecpTransaction'] = [
-        'publicAccountNumber' => $this->truncateEcpNumber(
-          $payment_method->account_number->value
-        ),
-        'publicRoutingNumber' => $this->truncateEcpNumber(
-          $payment_method->routing_number->value
-        ),
-        'accountType' => $payment_method->account_type->value,
-      ];
+    if ($owner->isAuthenticated()) {
+      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
     }
-    // If this is an anonymous user, pass the full ECP details and the payer's
-    // info as we haven't created a vaulted shopper for the user.
     else {
-      $transaction_data['ecpTransaction'] = [
-        'accountNumber' => $payment_method->account_number->value,
-        'routingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
-      ];
-      $transaction_data['payerInfo'] = [
-        'firstName' => $address->getGivenName(),
-        'lastName' => $address->getFamilyName(),
-      ];
+      $data['vaultedShopperId'] = $payment_method->getRemoteId();
     }
 
     // Create the payment transaction on BlueSnap.
@@ -93,7 +50,7 @@ class Ecp extends OnsiteBase {
       AltTransactionsClientInterface::API_ID,
       $this->getBluesnapConfig()
     );
-    $result = $client->create($transaction_data);
+    $result = $client->create($data);
 
     // Mark the payment as completed.
     $payment->setState('completed');
@@ -103,8 +60,6 @@ class Ecp extends OnsiteBase {
 
   /**
    * {@inheritdoc}
-   *
-   * @todo Needs kernel test
    */
   public function createPaymentMethod(
     PaymentMethodInterface $payment_method,
@@ -124,75 +79,52 @@ class Ecp extends OnsiteBase {
       }
     }
 
+    $remote_id = NULL;
+
     // If authenticated user, create or update the vaulted shopper details.
+    // There is no remote ID for the payment method provided by BlueSnap; we
+    // store the Vaulted Shopper ID as the method's remote ID instead. Even
+    // though it won't be used for authenticated users, it may still be proven
+    // valuable in the future. For example, if for whatever reason the Drupal
+    // user changes its corresponding Vaulted Shopper we will still have here
+    // the original Vaulted Shopper corresponding to this card for reference.
     $owner = $payment_method->getOwner();
     if ($owner && $owner->isAuthenticated()) {
-      $this->doCreatePaymentMethodForAuthenticatedUser(
+      $remote_id = $this->doCreatePaymentMethodForAuthenticatedUser(
         $payment_method,
         $payment_details,
         $this->getRemoteCustomerId($owner)
       );
     }
+    // We are not storing the full account/routing numbers for ECP payment
+    // methods for security reasons. The only way to then trigger a transaction
+    // is to create a Vaulted Shopper for anonymous users as well. We do not
+    // have a remote ID for the payment method itself and we cannot store the
+    // Vaulted Shopper ID to the anonymous user; we will therefore store the
+    // Vaulted Shopper ID to the payment method and use it to later trigger the
+    // transaction.
+    else {
+      $vaulted_shopper = $this->createVaultedShopper(
+        $payment_method,
+        $payment_details
+      );
+      $remote_id = $vaulted_shopper->id;
+    }
 
     // Save the payment method.
-    $payment_method->routing_number = $this->truncateEcpNumber($payment_details['routing_number']);
-    $payment_method->account_number = $this->truncateEcpNumber($payment_details['account_number']);
+    $payment_method->routing_number = $this->truncateEcpNumber(
+      $payment_details['routing_number']
+    );
+    $payment_method->account_number = $this->truncateEcpNumber(
+      $payment_details['account_number']
+    );
     $payment_method->account_type = $payment_details['account_type'];
-    // TODO: Do we have a remote ID?
+    $payment_method->setRemoteId($remote_id);
     $payment_method->save();
   }
 
   /**
-   * Creates the payment method for an authenticated user.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   * @param string $customer_id
-   *   The BlueSnap customer ID.
-   *
-   * @return array
-   *   The details of the entered credit card.
-   *
-   * @throws \Exception
-   */
-  protected function doCreatePaymentMethodForAuthenticatedUser(
-    PaymentMethodInterface $payment_method,
-    array $payment_details,
-    $customer_id = NULL
-  ) {
-    // Get the Vaulted Shopper API client.
-    $client = $this->clientFactory->get(
-      VaultedShoppersClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-
-    if ($customer_id) {
-      $ecp_data = $this->prepareEcpDetails($payment_method, $payment_details);
-
-      // Add the card to the existing vaulted shopper.
-      $client->addEcp($customer_id, $ecp_data);
-    }
-    else {
-      $shopper_data = $this->prepareVaultedShopperBillingInfo($payment_method);
-
-      // Create a new vaulted shopper.
-      $vaulted_shopper = $client->create($shopper_data);
-
-      // Save the new customer ID.
-      $owner = $payment_method->getOwner();
-      $this->setRemoteCustomerId($owner, $vaulted_shopper->id);
-      $owner->save();
-
-      return $vaulted_shopper;
-    }
-  }
-
-  /**
    * {@inheritdoc}
-   *
-   * @todo Needs kernel test
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
     $owner = $payment_method->getOwner();
@@ -205,6 +137,179 @@ class Ecp extends OnsiteBase {
     }
     // Delete the local entity.
     $payment_method->delete();
+  }
+
+  /**
+   * Creates the payment method for an authenticated user.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   * @param string $customer_id
+   *   The remote customer ID i.e. BlueSnap's Vaulted Shopper ID.
+   *
+   * @return array
+   *   The ID of the existing or newly created Vaulted Shopper.
+   */
+  protected function doCreatePaymentMethodForAuthenticatedUser(
+    PaymentMethodInterface $payment_method,
+    array $payment_details,
+    $customer_id = NULL
+  ) {
+    if ($customer_id) {
+      $this->doCreatePaymentMethodForExistingVaultedShopper(
+        $payment_method,
+        $payment_details,
+        $customer_id
+      );
+
+      return $customer_id;
+    }
+
+    return $this->doCreatePaymentMethodForNewVaultedShopper(
+      $payment_method,
+      $payment_details
+    );
+  }
+
+  /**
+   * Creates the payment method for a user with an existing Vaulted Shopper.
+   *
+   * Adds a new ECP payment source to the associated Vaulted Shopper in
+   * BlueSnap.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   * @param string $customer_id
+   *   The remote customer ID i.e. BlueSnap's Vaulted Shopper ID.
+   */
+  protected function doCreatePaymentMethodForExistingVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details,
+    $customer_id
+  ) {
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+
+    // Add the card to the existing vaulted shopper.
+    $client->addEcp(
+      $customer_id,
+      $this->prepareEcpDetails($payment_method, $payment_details)
+    );
+  }
+
+  /**
+   * Creates the payment method for a user without an existing Vaulted Shopper.
+   *
+   * Creates a new Vaulted Shopper with the ECP payment source in BlueSnap and
+   * it stores its ID in the .
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The ID of the newly created Vaulted Shopper.
+   */
+  protected function doCreatePaymentMethodForNewVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  ) {
+    $vaulted_shopper = $this->createVaultedShopper(
+      $payment_method,
+      $payment_details
+    );
+
+    // Save the new customer ID.
+    $owner = $payment_method->getOwner();
+    $this->setRemoteCustomerId($owner, $vaulted_shopper->id);
+    $owner->save();
+
+    return $vaulted_shopper->id;
+  }
+
+  /**
+   * Creates a Vaulted Shopper in BlueSnap based on the given payment method.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The details of the created Vaulted Shopper.
+   */
+  protected function createVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  ) {
+    // Prepare the data for the request.
+    $data = $this->prepareVaultedShopperBillingInfo($payment_method);
+    $ecp_data = $this->prepareEcpDetails(
+      $payment_method,
+      $payment_details
+    );
+    $data['paymentSources']['ecpDetails'] = [$ecp_data];
+
+    // Create and return the vaulted shopper.
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    return $client->create($data);
+  }
+
+  /**
+   * Prepare the data for triggering an ACH/ECP transaction.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment for which the transaction is being prepared.
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   *
+   * @return array
+   *   An array containing the data required to process an ACH/ECP transaction.
+   */
+  protected function prepareTransactionData(
+    PaymentInterface $payment,
+    PaymentMethodInterface $payment_method
+  ) {
+    // Prepare the transaction amount.
+    $amount = $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+
+    return [
+      'currency' => $amount->getCurrencyCode(),
+      'amount' => $amount->getNumber(),
+      // Authorization is captured by the payment method form.
+      'authorizedByShopper' => TRUE,
+      'transactionMetadata' => [
+        'metaData' => [
+          [
+            'metaKey' => 'order_id',
+            'metaValue' => $payment->getOrderId(),
+            'metaDescription' => 'The transaction\'s order ID.',
+          ],
+          [
+            'metaKey' => 'store_id',
+            'metaValue' => $payment->getOrder()->getStoreId(),
+            'metaDescription' => 'The transaction\'s store ID.',
+          ],
+        ],
+      ],
+      // Note that the account/routing numbers must already be truncated.
+      'ecpTransaction' => [
+        'publicAccountNumber' => $payment_method->account_number->value,
+        'publicRoutingNumber' => $payment_method->routing_number->value,
+        'accountType' => $payment_method->account_type->value,
+      ]
+    ];
   }
 
   /**

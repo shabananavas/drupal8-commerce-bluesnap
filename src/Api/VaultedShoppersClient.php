@@ -20,7 +20,7 @@ class VaultedShoppersClient implements VaultedShoppersClientInterface {
       return $response->data;
     }
 
-    throw new HardDeclineException('Unable to verify the credit card: ' . $response->data);
+    throw new HardDeclineException('Unable to verify the payment method details: ' . $response->data);
   }
 
   /**
