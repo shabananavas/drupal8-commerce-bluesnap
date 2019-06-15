@@ -245,7 +245,10 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase {
     unset($billing_info['address1']);
 
     // Add the email as well.
-    $billing_info['email'] = $payment_method->getOwner()->getEmail();
+    $owner = $payment_method->getOwner();
+    if ($owner->isAuthenticated()) {
+      $billing_info['email'] = $payment_method->getOwner()->getEmail();
+    }
 
     return $billing_info;
   }
