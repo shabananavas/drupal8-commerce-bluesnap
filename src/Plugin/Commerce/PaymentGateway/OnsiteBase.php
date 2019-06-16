@@ -3,11 +3,13 @@
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
+use Drupal\commerce_price\Price;
 use Drupal\commerce_price\RounderInterface;
 
 use Drupal\Component\Datetime\TimeInterface;
@@ -19,7 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Provides the bluesnap payment gateway base class.
  */
-abstract class OnsiteBase extends OnsitePaymentGatewayBase {
+abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInterface {
 
   /**
    * The rounder.
@@ -192,6 +194,47 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase {
    */
   protected function getPassword() {
     return $this->configuration['password'] ?: '';
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * This is added here instead of in the ECP gateway because it is exactly
+   * the same as the corresponding function for the Hosted Payment Fields
+   * gateway. The idea is to eventually base the Hosted Payment Fields on this
+   * class as well.
+   */
+  public function refundPayment(
+    PaymentInterface $payment,
+    Price $amount = NULL
+  ) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    // Round the amount as it can be manually entered via the Refund form.
+    $amount = $this->rounder->round($amount);
+    $this->assertRefundAmount($payment, $amount);
+
+    // Refund the payment transaction on BlueSnap.
+    $data = ['amount' => $amount->getNumber()];
+    $client = $this->clientFactory->get(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $client->refund($payment->getRemoteId(), $data);
+
+    // Update the payment.
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->setState('partially_refunded');
+    }
+    else {
+      $payment->setState('refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
   }
 
   /**

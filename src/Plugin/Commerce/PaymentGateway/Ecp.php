@@ -318,7 +318,7 @@ class Ecp extends OnsiteBase {
         'publicAccountNumber' => $payment_method->account_number->value,
         'publicRoutingNumber' => $payment_method->routing_number->value,
         'accountType' => $payment_method->account_type->value,
-      ]
+      ],
     ];
   }
 
