@@ -57,6 +57,22 @@ interface VaultedShoppersClientInterface extends ClientInterface {
   public function addCard($vaulted_shopper_id, array $data);
 
   /**
+   * Adds a new ECP to an existing vaulted shopper on the BlueSnap gateway.
+   *
+   * @param int $vaulted_shopper_id
+   *   The vaulted shopper ID.
+   * @param array $data
+   *   An array of ECP data to pass to BlueSnap.
+   *
+   * @return array
+   *   The response returned from BlueSnap.
+   *
+   * @throws \Drupal\commerce_payment\Exception\HardDeclineException
+   *   When adding the ECP fails.
+   */
+  public function addEcp($vaulted_shopper_id, array $data);
+
+  /**
    * Deletes a card from an existing vaulted shopper on the BlueSnap gateway.
    *
    * @param int $vaulted_shopper_id
