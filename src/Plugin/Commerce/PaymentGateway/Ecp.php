@@ -18,6 +18,7 @@ use Drupal\commerce_payment\Entity\PaymentMethodInterface;
  *     "add-payment-method" = "Drupal\commerce_bluesnap\PluginForm\Bluesnap\EcpPaymentMethodAddForm",
  *   },
  *   payment_method_types = {"bluesnap_ecp"},
+ *   payment_type = "bluesnap_ecp",
  * )
  */
 class Ecp extends OnsiteBase {
@@ -53,7 +54,7 @@ class Ecp extends OnsiteBase {
     $result = $client->create($data);
 
     // Mark the payment as completed.
-    $payment->setState('completed');
+    $payment->setState('pending');
     $payment->setRemoteId($result->id);
     $payment->save();
   }
