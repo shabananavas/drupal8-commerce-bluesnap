@@ -38,8 +38,9 @@ interface ConfigInterface {
    * @param \Drupal\Core\Entity\ContentEntityInterface $entity
    *   The entity for which to get the settings.
    *
-   * @return array
-   *   The BlueSnap enhanced data settings.
+   * @return array|null
+   *   The BlueSnap enhanced data settings; NULL if no settings are defined for
+   *   the given entity.
    */
   public function getSettings(ContentEntityInterface $entity);
 

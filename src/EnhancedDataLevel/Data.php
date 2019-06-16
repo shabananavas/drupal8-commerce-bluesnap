@@ -6,13 +6,7 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 
 /**
- * Bluesnap enhanced data class.
- *
- * Bluesnap's Enhanced data levels, such as Level 2 and Level 3,
- * require extra information to process the transaction .
- * This service provides methods for getting
- * level 2 or level 3 data depending on the
- * card type and store/product variation settings.
+ * Default implementation of the enhanced data service.
  */
 class Data implements DataInterface {
 
@@ -24,7 +18,7 @@ class Data implements DataInterface {
   protected $config;
 
   /**
-   * Constructs a new blueSnap enhanced data object.
+   * Constructs a new Data object.
    *
    * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface $config
    *   The BlueSnap enhanced data config.
@@ -40,10 +34,10 @@ class Data implements DataInterface {
     $output = [];
 
     // Get the blueSnap enhanced data level.
-    // Proceed only if enhanced data is set in either store
-    // or product variation config.
+    // Proceed only if enhanced data is set in either store or product variation
+    // config.
     $data_level = $this->dataLevel($order);
-    if (!($data_level)) {
+    if (!$data_level) {
       return $output;
     }
 
@@ -65,21 +59,19 @@ class Data implements DataInterface {
   /**
    * Returns data level if enhanced data is set, FALSE otherwise.
    *
-   * For a given order, checks whether the enhanced data is
-   * set in store level. Store level setting takes priority over
-   * SKU level setting, hence the enhanced data status will be
-   * considered as true for the order if it is set in store level.
-   * If enhanced data is not set in store level
-   * we loop through each product in the order to see if there is atleast
-   * one product which have enhanced data set.
-   * If yes enhanced data status will beconsidered
-   * as true for the entire order.
+   * For a given order, checks whether the enhanced data is set at the store
+   * level. If a level is definedStore level setting takes priority over SKU level setting, hence the
+   * enhanced data status will be considered as true for the order if it is set
+   * in store level. If enhanced data is not set in store level we loop through
+   * each product in the order to see if there is at least one product which
+   * have enhanced data set. If yes enhanced data status will beconsidered as
+   * true for the entire order.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order object for which we are checking the enhanced data status.
    *
-   * @return int|bool
-   *   data level if enhanced data is set for the order, FALSE otherwise.
+   * @return string|null
+   *   The data level, NULL if none could be determined for the order.
    */
   protected function dataLevel(OrderInterface $order) {
     $store = $order->getStore();
@@ -90,12 +82,11 @@ class Data implements DataInterface {
       return $settings->level;
     }
 
-    // If enhanced data level is turned off in store,
-    // we iterate through each product to see
-    // if anyone of the product in the order has
-    // enhanced data level turned on.
+    // If enhanced data level is turned off in store, we iterate through each
+    // product to see if any of the products in the order has enhanced data
+    // turned on.
     foreach ($order->getItems() as $order_item) {
-      if (!($order_item->hasPurchasedEntity())) {
+      if (!$order_item->hasPurchasedEntity()) {
         continue;
       }
 
@@ -103,15 +94,12 @@ class Data implements DataInterface {
 
       // Get enhanced data settings for product.
       $settings = $this->config->getSettings($purchased_entity);
-      if (!($settings->status)) {
+      if (!$settings->status) {
         continue;
       }
 
-      $data_level = $settings->level;
-      return $data_level;
+      return $settings->level;
     }
-
-    return FALSE;
   }
 
   /**
@@ -497,7 +485,7 @@ class Data implements DataInterface {
    * @param array $adjustments
    *   Array of adjustments.
    *
-   * @return int
+   * @return string|null
    *   Sum of tax rates, NULL if no percentage tax found
    */
   protected function getTaxRateTotal(array $adjustments) {
@@ -512,7 +500,7 @@ class Data implements DataInterface {
       // the whole tax is not considered a percentage. Do not pass the tax rate
       // property to BlueSnap.
       if ($percentage === NULL) {
-        return NULL;
+        return;
       }
 
       $total_tax_rate += $tax->getPercentage();

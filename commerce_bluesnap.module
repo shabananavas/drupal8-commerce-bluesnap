@@ -46,8 +46,8 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
 function commerce_bluesnap_entity_base_field_info(
     EntityTypeInterface $entity_type
 ) {
-  if ($entity_type->id() !== 'commerce_store'
-    && $entity_type->id() !== 'commerce_product_variation') {
+  $supported_entity_types = ['commerce_store', 'commerce_product_variation'];
+  if (!in_array($entity_type->id(), $supported_entity_types)) {
     return;
   }
 
@@ -74,7 +74,7 @@ function commerce_bluesnap_form_alter(
   FormStateInterface $form_state,
   $form_id
 ) {
-  // Early return if we are not dealing with a entity form.
+  // Early return if we are not dealing with an entity form.
   $form_object = $form_state->getFormObject();
   if (!($form_object instanceof EntityFormInterface)) {
     return;
@@ -83,8 +83,8 @@ function commerce_bluesnap_form_alter(
   // We are currently interested only in product variation
   // and store entity types.
   $entity_type = $form_object->getEntity()->getEntityTypeId();
-  if ($entity_type != 'commerce_product_variation' &&
-    $entity_type != 'commerce_store') {
+  $supported_entity_types = ['commerce_store', 'commerce_product_variation'];
+  if (!in_array($entity_type, $supported_entity_types)) {
     return;
   }
 
@@ -111,12 +111,12 @@ function commerce_bluesnap_form_alter(
  * Form submit for the blueSnap settings form.
  */
 function commerce_bluesnap_form_commerce_bluesnap_settings_form_submit(
-    $form,
-    FormStateInterface $form_state
+  $form,
+  FormStateInterface $form_state
 ) {
   $bluesnap = $form_state->getValue('bluesnap');
 
   // Save bluesnap datalevel settings as json encoded string.
-  $store = $form_state->getFormObject()->getEntity();
-  $store->set('bluesnap_settings', json_encode($bluesnap));
+  $entity = $form_state->getFormObject()->getEntity();
+  $entity->set('bluesnap_settings', json_encode($bluesnap));
 }

@@ -64,7 +64,7 @@ class Config implements ConfigInterface {
   public function getSettings(ContentEntityInterface $entity) {
     $settings = $entity->get('bluesnap_settings')->value;
     $settings = json_decode($settings);
-    if (empty($settings)) {
+    if (!$settings) {
       return;
     }
 
