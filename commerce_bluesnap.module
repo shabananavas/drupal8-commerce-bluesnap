@@ -5,8 +5,8 @@
  * Provides Commerce integration with the BlueSnap Payment Gateway.
  */
 
-use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityFormInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;

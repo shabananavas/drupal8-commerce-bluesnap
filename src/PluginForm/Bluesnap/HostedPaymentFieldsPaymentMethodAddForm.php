@@ -2,8 +2,8 @@
 
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
-use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce\InlineFormManager;
