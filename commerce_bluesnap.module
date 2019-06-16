@@ -5,6 +5,9 @@
  * Provides Commerce integration with the BlueSnap Payment Gateway.
  */
 
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Url;
 
@@ -34,4 +37,74 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
       $output .= '</ul>';
       return $output;
   }
+}
+
+/**
+ * Implements hook_entity_base_field_info().
+ */
+function commerce_bluesnap_entity_base_field_info(
+    EntityTypeInterface $entity_type
+) {
+  if ($entity_type->id() !== 'commerce_store') {
+    return;
+  }
+
+  // Add bluesnap data level service settings field.
+  $fields['bluesnap_settings'] = BaseFieldDefinition::create('string_long')
+    ->setLabel(t('Bluesnap settings'))
+    ->setDisplayOptions('view', [
+      'region' => 'hidden',
+    ])
+    ->setDisplayOptions('form', [
+      'region' => 'hidden',
+    ])
+    ->setDisplayConfigurable('form', TRUE)
+    ->setDisplayConfigurable('view', TRUE);
+
+  return $fields;
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function commerce_bluesnap_form_commerce_store_form_alter(
+  &$form,
+  FormStateInterface $form_state,
+  $form_id
+) {
+  /** @var \Drupal\commerce_store\Entity\StoreInterface $store */
+  $store = $form_state->getFormObject()->getEntity();
+
+  // Add a form wrapper element for bluesnap settings.
+  $form['bluesnap'] = [
+    '#type' => 'details',
+    '#title' => t('Bluesnap settings'),
+    '#open' => TRUE,
+    '#tree' => TRUE,
+  ];
+
+  // Build the BlueSnap data level settings form fields.
+  $data_level = \Drupal::service('commerce_bluesnap.data_level');
+  $form['bluesnap']['data_level'] = $data_level->buildSettingsForm($store);
+
+  // Execute our submit handler first so that we don't have to save the store
+  // entity twice.
+  array_unshift(
+    $form['actions']['submit']['#submit'],
+    'commerce_bluesnap_form_commerce_store_form_submit'
+  );
+}
+
+/**
+ * Form submit for the commerce_store entity form.
+ */
+function commerce_bluesnap_form_commerce_store_form_submit(
+    $form,
+    FormStateInterface $form_state
+) {
+  $bluesnap = $form_state->getValue('bluesnap');
+
+  // Save bluesnap datalevel settings as json encoded string.
+  $store = $form_state->getFormObject()->getEntity();
+  $store->set('bluesnap_settings', json_encode($bluesnap));
 }
