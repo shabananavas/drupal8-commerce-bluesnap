@@ -4,29 +4,13 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
-use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_bluesnap\DataLevelInterface;
-use Drupal\commerce_bluesnap\FraudSessionInterface;
 
-use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
-use Drupal\commerce_payment\PaymentMethodTypeManager;
-use Drupal\commerce_payment\PaymentTypeManager;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
 use Drupal\commerce_price\Price;
-use Drupal\commerce_price\RounderInterface;
-
-use CommerceGuys\Addressing\AddressInterface;
-use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Extension\ModuleHandlerInterface;
-
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Provides the Bluesnap Hosted Payment Fields payment gateway.
@@ -46,178 +30,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   js_library = "commerce_bluesnap/form",
  * )
  */
-class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaymentFieldsInterface {
-
-  /**
-   * The rounder.
-   *
-   * @var \Drupal\commerce_price\RounderInterface
-   */
-  protected $rounder;
-
-  /**
-   * The Bluesnap API client factory.
-   *
-   * @var \Drupal\commerce_bluesnap\Api\ClientFactory
-   */
-  protected $clientFactory;
-
-  /**
-   * The Bluesnap fraud session process.
-   *
-   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
-   */
-  protected $fraudSession;
-
-  /**
-   * The module handler.
-   *
-   * @var \Drupal\Core\Extension\ModuleHandlerInterface
-   */
-  protected $moduleHandler;
-
-  /**
-   * The Bluesnap data level service.
-   *
-   * @var \Drupal\commerce_bluesnap\DataLevelInterface
-   */
-  protected $dataLevel;
-
-  /**
-   * Constructs a new HostedPaymentFields object.
-   *
-   * @param array $configuration
-   *   A configuration array containing information about the plugin instance.
-   * @param string $plugin_id
-   *   The plugin_id for the plugin instance.
-   * @param mixed $plugin_definition
-   *   The plugin implementation definition.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager.
-   * @param \Drupal\commerce_payment\PaymentTypeManager $payment_type_manager
-   *   The payment type manager.
-   * @param \Drupal\commerce_payment\PaymentMethodTypeManager $payment_method_type_manager
-   *   The payment method type manager.
-   * @param \Drupal\Component\Datetime\TimeInterface $time
-   *   The time.
-   * @param \Drupal\commerce_price\RounderInterface $rounder
-   *   The rounder.
-   * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
-   *   The Bluesnap API client factory.
-   * @param \Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
-   *   The Bluesnap fraud session process.
-   * @param \Drupal\commerce_bluesnap\DataLevelInterface $data_level
-   *   The Bluesnap data level service.
-   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
-   *   The module handler.
-   */
-  public function __construct(
-    array $configuration,
-    $plugin_id,
-    $plugin_definition,
-    EntityTypeManagerInterface $entity_type_manager,
-    PaymentTypeManager $payment_type_manager,
-    PaymentMethodTypeManager $payment_method_type_manager,
-    TimeInterface $time,
-    RounderInterface $rounder,
-    ClientFactory $client_factory,
-    FraudSessionInterface $fraud_session,
-    DataLevelInterface $data_level,
-    ModuleHandlerInterface $module_handler
-  ) {
-    parent::__construct(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $entity_type_manager,
-      $payment_type_manager,
-      $payment_method_type_manager,
-      $time
-    );
-
-    $this->rounder = $rounder;
-    $this->clientFactory = $client_factory;
-    $this->fraudSession = $fraud_session;
-    $this->dataLevel = $data_level;
-    $this->moduleHandler = $module_handler;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function create(
-    ContainerInterface $container,
-    array $configuration,
-    $plugin_id,
-    $plugin_definition) {
-    return new static(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $container->get('entity_type.manager'),
-      $container->get('plugin.manager.commerce_payment_type'),
-      $container->get('plugin.manager.commerce_payment_method_type'),
-      $container->get('datetime.time'),
-      $container->get('commerce_price.rounder'),
-      $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.fraud_session'),
-      $container->get('commerce_bluesnap.data_level'),
-      $container->get('module_handler')
-    );
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function defaultConfiguration() {
-    return [
-      'username' => '',
-      'password' => '',
-    ] + parent::defaultConfiguration();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildConfigurationForm(
-    array $form,
-    FormStateInterface $form_state
-  ) {
-    $form = parent::buildConfigurationForm($form, $form_state);
-
-    $form['username'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Username'),
-      '#default_value' => $this->configuration['username'],
-      '#required' => TRUE,
-    ];
-
-    $form['password'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Password'),
-      '#default_value' => $this->configuration['password'],
-      '#required' => TRUE,
-    ];
-
-    return $form;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function submitConfigurationForm(
-    array &$form,
-    FormStateInterface $form_state
-  ) {
-    parent::submitConfigurationForm($form, $form_state);
-
-    if (!$form_state->getErrors()) {
-      $values = $form_state->getValue($form['#parents']);
-
-      $this->configuration['username'] = $values['username'];
-      $this->configuration['password'] = $values['password'];
-    }
-  }
+class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInterface {
 
   /**
    * {@inheritdoc}
@@ -227,7 +40,20 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    $result_id = $this->blueSnapTransaction($payment, $capture);
+    // Check whether the order is a recurring order, if yes
+    // perform the recurring transaction.
+    $result_id = $this->recurringTransaction($payment, $capture);
+
+    // If order is not a recurring order, continue with default
+    // credit card transaction.
+    if (empty($result_id)) {
+      $client = $this->clientFactory->get(
+        TransactionsClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+      $result = $client->create($this->cardTransactionData($payment, $capture));
+      $result_id = $result->id;
+    }
 
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
@@ -293,44 +119,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     $result = $client->update($remote_id, $transaction_data);
 
     $payment->setState('authorization_voided');
-    $payment->save();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function refundPayment(
-    PaymentInterface $payment,
-    Price $amount = NULL
-  ) {
-    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
-    // If not specified, refund the entire amount.
-    $amount = $amount ?: $payment->getAmount();
-    // Round the amount as it can be manually entered via the Refund form.
-    $amount = $this->rounder->round($amount);
-    $this->assertRefundAmount($payment, $amount);
-
-    // Refund the payment transaction on BlueSnap.
-    $transaction_data = [
-      'amount' => $amount->getNumber(),
-    ];
-    $client = $this->clientFactory->get(
-      TransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $client->refund($payment->getRemoteId(), $transaction_data);
-
-    // Update the payment.
-    $old_refunded_amount = $payment->getRefundedAmount();
-    $new_refunded_amount = $old_refunded_amount->add($amount);
-    if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->setState('partially_refunded');
-    }
-    else {
-      $payment->setState('refunded');
-    }
-
-    $payment->setRefundedAmount($new_refunded_amount);
     $payment->save();
   }
 
@@ -429,43 +217,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   }
 
   /**
-   * Returns the BlueSnap configuration for this payment gateway.
-   *
-   * @return array
-   *   An array holding the BlueSnap configuration as required by the Client
-   *   Factory.
-   *   See \Drupal\commerce_bluesnap\Api\ClientFactory::init() for details.
-   */
-  public function getBluesnapConfig() {
-    return [
-      'env' => $this->getEnvironment(),
-      'username' => $this->getUsername(),
-      'password' => $this->getPassword(),
-    ];
-  }
-
-  /**
-   * Returns the environment for BlueSnap.
-   */
-  protected function getEnvironment() {
-    return $this->getMode() === 'live' ? 'production' : 'sandbox';
-  }
-
-  /**
-   * Returns the username.
-   */
-  protected function getUsername() {
-    return $this->configuration['username'] ?: '';
-  }
-
-  /**
-   * Returns the password.
-   */
-  protected function getPassword() {
-    return $this->configuration['password'] ?: '';
-  }
-
-  /**
    * Maps the BlueSnap credit card type to a Commerce credit card type.
    *
    * @param string $card_type
@@ -546,9 +297,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   ) {
     $owner = $payment_method->getOwner();
 
-    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
-    $address = $payment_method->getBillingProfile()->get('address')->first();
-    $billing_info = $this->payerInfo($address);
+    $billing_info = $this->prepareBillingContactInfo($payment_method);
 
     // Get the Vaulted Shopper API client.
     $client = $this->clientFactory->get(
@@ -556,7 +305,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       $this->getBluesnapConfig()
     );
 
-    $credit_card_data = $this->creditCardInfo();
+    $credit_card_data = $this->creditCardInfo($payment_method, $payment_details);
 
     // If this is an existing BlueSnap customer, use the token to create the new
     // card.
@@ -566,21 +315,16 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     }
     // If it's a new customer, create a new vaulted shopper on BlueSnap.
     else {
-      $data = [
-        'firstName' => $address->getGivenName(),
-        'lastName' => $address->getFamilyName(),
-        'email' => $owner->getEmail(),
-        'address' => $address->getAddressLine1(),
-        'address2' => $address->getAddressLine2(),
-        'city' => $address->getLocality(),
-        'state' => $address->getAdministrativeArea(),
-        'zip' => $address->getPostalCode(),
-        'country' => $address->getCountryCode(),
+      $vaulted_shopper_billing = $this->prepareVaultedShopperBillingInfo($payment_method);
+
+      $data = $vaulted_shopper_billing + [
         'transactionFraudInfo' => [
           "fraudSessionId" => $this->fraudSession->get(),
         ],
         'paymentSources' => [
-          'creditCardInfo' => $credit_card_data,
+          'creditCardInfo' => [
+            $credit_card_data,
+          ],
         ],
       ];
 
@@ -593,69 +337,6 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
 
       return $vaulted_shopper;
     }
-  }
-
-  /**
-   * Creates a payment transaction in bluesnap.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment.
-   * @param bool $capture
-   *   Whether the created payment should be captured (VS authorized only).
-   *   Allowed to be FALSE only if the plugin supports authorizations.
-   *
-   * @return int
-   *   The BlueSnap response ID.
-   */
-  protected function blueSnapTransaction(PaymentInterface $payment, $capture) {
-    $order = $payment->getOrder();
-
-    // If recurring order use merchant managed subscription API.
-    if ($this->isRecurring($order)) {
-      $client = $this->clientFactory->get(
-        SubscriptionClientInterface::API_ID,
-        $this->getBluesnapConfig()
-      );
-
-      $result = $client->create($this->transactionData($payment, $capture));
-      return $result->subscriptionId;
-    }
-    // If not a recurring order use card transactions API.
-    else {
-      $client = $this->clientFactory->get(
-        TransactionsClientInterface::API_ID,
-        $this->getBluesnapConfig()
-      );
-
-      $result = $client->create($this->transactionData($payment, $capture));
-      return $result->id;
-    }
-
-    return FALSE;
-  }
-
-  /**
-   * Prepares the transaction data required for blueSnap transaction API.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment.
-   * @param bool $capture
-   *   Whether the created payment should be captured (VS authorized only).
-   *   Allowed to be FALSE only if the plugin supports authorizations.
-   *
-   * @return array
-   *   The transaction data array as required by BlueSnap.
-   */
-  protected function transactionData(PaymentInterface $payment, $capture) {
-    $order = $payment->getOrder();
-
-    // If recurring order get merchant managed subscription transaction data.
-    if ($this->isRecurring($order)) {
-      return $this->merchantManagedSubscriptionData($payment, $capture);
-    }
-
-    // If not a recurring order use card transaction data.
-    return $this->cardTransactionData($payment, $capture);
   }
 
   /**
@@ -699,7 +380,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
       ],
     ];
 
-    // Add bluesnap level2/3 data to transaction
+    // Add bluesnap level2/3 data to transaction.
     $level_2_3_data = $this->dataLevel->getData(
       $payment->getOrder(),
       $payment_method->card_type->value
@@ -720,130 +401,11 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
     // If this is an anonymous user, use the BlueSnap token in the payment data.
     else {
       $transaction_data['pfToken'] = $payment_method->getRemoteId();
-      /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
-      $address = $payment_method->getBillingProfile()->get('address')->first();
       // First and last name are required.
-      $transaction_data['cardHolderInfo'] = $this->payerInfo($address);
+      $transaction_data['cardHolderInfo'] = $this->prepareBillingContactInfo($payment_method);
     }
 
     return $transaction_data;
-  }
-
-  /**
-   * Prepares the transaction data required for blueSnap subscription API.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment.
-   * @param bool $capture
-   *   Whether the created payment should be captured (VS authorized only).
-   *   Allowed to be FALSE only if the plugin supports authorizations.
-   *
-   * @return array
-   *   The subscription transaction data array as required by BlueSnap.
-   */
-  protected function merchantManagedSubscriptionData(
-    PaymentInterface $payment,
-    $capture
-  ) {
-    $payment_method = $payment->getPaymentMethod();
-
-    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
-    $address = $payment_method->getBillingProfile()->get('address')->first();
-
-    $amount = $payment->getAmount();
-    $amount = $this->rounder->round($amount);
-
-    // Create the payment data.
-    $transaction_data = [
-      'currency' => $amount->getCurrencyCode(),
-      'amount' => $amount->getNumber(),
-    ];
-
-    // Add bluesnap level2/3 data to transaction
-    $level_2_3_data = $this->dataLevel->getData(
-      $payment->getOrder(),
-      $payment_method->card_type->value
-    );
-    $transaction_data = $transaction_data + $level_2_3_data;
-
-    $payer_info = $this->payerInfo($address);
-
-    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
-    // the payment data.
-    $owner = $payment_method->getOwner();
-    if ($owner && $owner->isAuthenticated()) {
-      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-    }
-    // If this is an anonymous user, send the payerinfo..
-    else {
-      // First and last name are required.
-      $transaction_data['payerInfo'] = $payer_info;
-    }
-
-    $transaction_data['paymentSource']['creditCardInfo'] =
-      $this->creditCardInfo($payment_method, $address);
-
-    return $transaction_data;
-  }
-
-  /**
-   * Checks whether an order is recurring or not.
-   *
-   * @param Drupal\commerce_order\Entity\Order $order
-   *   The order entity to be checked for recurring or not.
-   *
-   * @return bool
-   *   True if order is recurring, False if not.
-   */
-  protected function isRecurring(Order $order) {
-    // If commerce recurring module exists and if the order type is recuring
-    // we assume that it is a recurring order.
-    if ($this->moduleHandler->moduleExists('commerce_recurring')
-      && $order->bundle() == 'recurring') {
-      return TRUE;
-    }
-
-    // If order bundle is not recurring, then we have to loop through
-    // each product to see if there exists a product with subscription enabled
-    foreach ($order->getItems() as $order_item) {
-      $purchased_entity = $order_item->getPurchasedEntity();
-      if ($purchased_entity && !$purchased_entity->hasField('subscription_type')) {
-        continue;
-      }
-
-      // Can be considered as a subsscripton order if it has atleast one
-      // product which has subscription enabled.
-      $subscription_type_item = $purchased_entity->get('subscription_type');
-      $billing_schedule_item = $purchased_entity->get('billing_schedule');
-      if (!($subscription_type_item->isEmpty()) || !($billing_schedule_item->isEmpty())) {
-        return TRUE;
-      }
-
-    }
-
-    return FALSE;
-  }
-
-  /**
-   * Prepares the payer information array.
-   *
-   * @param CommerceGuys\Addressing\AddressInterface $address
-   *   The billing address.
-   *
-   * @return array
-   *   Array which contains the payer info as required by bluesnap.
-   */
-  protected function payerInfo(AddressInterface $address) {
-    return [
-      'firstName' => $address->getGivenName(),
-      'lastName' => $address->getFamilyName(),
-      'address1' => $address->getAddressLine1(),
-      'address2' => $address->getAddressLine2(),
-      'city' => $address->getLocality(),
-      'state' => $address->getAdministrativeArea(),
-      'zip' => $address->getPostalCode(),
-      'country' => $address->getCountryCode(),
-    ];
   }
 
   /**
@@ -851,19 +413,19 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
    *
    * @param Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
    *   The order payment method.
-   * @param CommerceGuys\Addressing\AddressInterface $address
-   *   The billing address.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
    *
    * @return array
    *   The credit card info array.
    */
   protected function creditCardInfo(
     PaymentMethodInterface $payment_method,
-    AddressInterface $address
+    array $payment_details
   ) {
     return [
-      'billingContactInfo' => $this->payerInfo($address),
-      'pfToken' => $payment_method->getRemoteId(),
+      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
+      'pfToken' => $payment_details['bluesnap_token'],
     ];
   }
 

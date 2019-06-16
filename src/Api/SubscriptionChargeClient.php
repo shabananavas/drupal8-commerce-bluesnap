@@ -4,13 +4,13 @@ namespace Drupal\commerce_bluesnap\Api;
 
 use Drupal\commerce_payment\Exception\HardDeclineException;
 
-use Bluesnap\MerchantManagedSubscription;
+use Bluesnap\MerchantManagedSubscriptionCharge;
 use Psr\Log\LoggerInterface;
 
 /**
  * Client for making requests to the Card/Wallet Transactions API.
  */
-class SubscriptionClient implements SubscriptionClientInterface {
+class SubscriptionChargeClient implements SubscriptionChargeClientInterface {
 
   /**
    * The logger.
@@ -33,7 +33,7 @@ class SubscriptionClient implements SubscriptionClientInterface {
    * {@inheritdoc}
    */
   public function create(array $data) {
-    $response = MerchantManagedSubscription::create($data);
+    $response = MerchantManagedSubscriptionCharge::create($data);
 
     // Return the data on success.
     if ($response->succeeded()) {
@@ -44,11 +44,10 @@ class SubscriptionClient implements SubscriptionClientInterface {
     // PaymentProcess checkout pane.
     $message = sprintf(
       'Could not process the "%s" action for the transaction. Message "%s"',
-      'merchant managed subscription create transaction',
+      'merchant managed subscription charge transaction',
       $response->data
     );
     $this->logger->warning($message);
-
     throw new HardDeclineException('We encountered an error processing your payment method. Please verify your details and try again.');
   }
 

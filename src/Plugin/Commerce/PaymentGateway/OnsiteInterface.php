@@ -6,8 +6,8 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayI
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 
 /**
- * Provides the interface for the BlueSnap ACH/ECP payment gateway.
+ * Interface for class OnsiteBase.
  */
 interface OnsiteInterface extends
-  OnsitePaymentGatewayInterface,
-  SupportsRefundsInterface {}
+    OnsitePaymentGatewayInterface,
+    SupportsRefundsInterface {}

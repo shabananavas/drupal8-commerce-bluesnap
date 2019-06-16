@@ -10,6 +10,6 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterf
  * Provides the interface for the Hosted Payment Fields payment gateway.
  */
 interface HostedPaymentFieldsInterface extends
-  OnsitePaymentGatewayInterface,
-  SupportsAuthorizationsInterface,
-  SupportsRefundsInterface {}
+    OnsitePaymentGatewayInterface,
+    SupportsAuthorizationsInterface,
+    SupportsRefundsInterface {}
