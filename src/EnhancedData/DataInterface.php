@@ -16,6 +16,15 @@ use Drupal\commerce_order\Entity\OrderInterface;
 interface DataInterface {
 
   /**
+   * An identifier for Level 2 data to use throughout the code.
+   */
+  const LEVEL_2_ID = '2';
+  /**
+   * An identifier for Level 3 data to use throughout the code.
+   */
+  const LEVEL_3_ID = '3';
+
+  /**
    * Prepares and returns the enhanced data for the given order and card type.
    *
    * @param Drupal\commerce_order\Entity\OrderInterface $order
