@@ -3,7 +3,10 @@
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\AltTransactionsClientInterface;
+use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
+use Drupal\commerce_bluesnap\Api\SubscriptionChargeClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 
@@ -31,31 +34,25 @@ class Ecp extends OnsiteBase {
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    // Prepare the data required to process an ACH/ECP transaction.
-    $data = $this->prepareTransactionData($payment, $payment_method, $amount);
+    // Check whether the order is a recurring order, if yes
+    // perform the recurring transaction.
+    $result_id = $this->recurringTransaction($payment, $capture);
 
-    // We create Vaulted Shoppers for both authenticated and anonymous. For
-    // authenticated users we store the Vaulted Shopper ID as the user's remote
-    // ID, while for anonymous users we store it as the payment method's remote
-    // ID.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-    }
-    else {
-      $data['vaultedShopperId'] = $payment_method->getRemoteId();
-    }
+    if (empty($result_id)) {
+      $data = $this->ecpTransactionData($payment, $capture);
 
-    // Create the payment transaction on BlueSnap.
-    $client = $this->clientFactory->get(
-      AltTransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $result = $client->create($data);
+      // Create the payment transaction on BlueSnap.
+      $client = $this->clientFactory->get(
+        AltTransactionsClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+      $result = $client->create($data);
+      $result_id = $result->id;
+    }
 
     // Mark the payment as completed.
     $payment->setState('pending');
-    $payment->setRemoteId($result->id);
+    $payment->setRemoteId($result_id);
     $payment->save();
   }
 
@@ -138,6 +135,103 @@ class Ecp extends OnsiteBase {
     }
     // Delete the local entity.
     $payment_method->delete();
+  }
+
+  /**
+   * Create a recurring payment transaction in bluesnap.
+   *
+   * Check whether the order is recurring or not and if yes
+   * make a recurring create/charge transaction in bluesnap.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   * @param bool $capture
+   *   Whether the created payment should be captured (VS authorized only).
+   *   Allowed to be FALSE only if the plugin supports authorizations.
+   *
+   * @return int
+   *   The BlueSnap response ID.
+   */
+  protected function recurringTransaction(PaymentInterface $payment, $capture) {
+    $order = $payment->getOrder();
+
+    // If recurring order,
+    // use merchant managed subscription charge API.
+    if ($this->isRecurring($order)) {
+      $client = $this->clientFactory->get(
+        SubscriptionChargeClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+
+      // Data required for a merchant managed subscription charge.
+      $data = $this->merchantManagedSubscriptionChargeData($payment, $capture);
+      $data['subscription_id'] = $this->subscriptionId($order);
+
+      $result = $client->create($data);
+
+      return $result->subscriptionId;
+    }
+
+    // If initial recurring order,
+    // use merchant managed subscription create API.
+    elseif ($this->isInitialRecurring($order)) {
+      $client = $this->clientFactory->get(
+        SubscriptionClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+
+      // Data required for a merchant managed subscription.
+      $data = $this->ecpTransactionData($payment, $capture);
+      $result = $client->create($data);
+
+      // The subscription ID is not returned in the
+      // Create Subscription response.
+      // It is created once the payment has been processed
+      // (typically within 2–6 business days).
+      // You then be informed of the subscription ID via Charge webhook
+      // or via Retrieve Specific Charge request.
+      // @to-do Fetch subscription ID in IPN implementation.
+      if (!empty($result->subscriptionId)) {
+        return $result->subscriptionId;
+      }
+
+      return $result->transactionId;
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Prepares the transaction data required for blueSnap Ecp transaction API.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   * @param bool $capture
+   *   Whether the created payment should be captured (VS authorized only).
+   *   Allowed to be FALSE only if the plugin supports authorizations.
+   *
+   * @return array
+   *   The card transaction data array as required by BlueSnap.
+   */
+  protected function ecpTransactionData(PaymentInterface $payment, $capture) {
+    $payment_method = $payment->getPaymentMethod();
+
+    // Prepare the data required to process an ACH/ECP transaction.
+    $data = $this->prepareTransactionData($payment, $payment_method);
+
+    // We create Vaulted Shoppers for both authenticated and anonymous. For
+    // authenticated users we store the Vaulted Shopper ID as the user's remote
+    // ID, while for anonymous users we store it as the payment method's remote
+    // ID.
+    $owner = $payment_method->getOwner();
+    if ($owner->isAuthenticated()) {
+      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    }
+    else {
+      $data['vaultedShopperId'] = $payment_method->getRemoteId();
+    }
+
+    return $data;
   }
 
   /**
@@ -258,7 +352,7 @@ class Ecp extends OnsiteBase {
       $payment_method,
       $payment_details
     );
-    $data['paymentSources']['ecpDetails'] = [$ecp_data];
+    $data['paymentSources']['ecpDetails'][] = $ecp_data;
 
     // We pass the Drupal user ID as the merchant shopper ID, only for
     // authenticated users.
@@ -338,7 +432,6 @@ class Ecp extends OnsiteBase {
     array $payment_details
   ) {
     return [
-      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'ecp' => [
         'routingNumber' => $payment_details['routing_number'],
         'accountType' => $payment_details['account_type'],

@@ -3,6 +3,8 @@
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
+use Drupal\commerce_bluesnap\Api\SubscriptionChargeClientInterface;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 
@@ -403,6 +405,113 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $transaction_data['pfToken'] = $payment_method->getRemoteId();
       // First and last name are required.
       $transaction_data['cardHolderInfo'] = $this->prepareBillingContactInfo($payment_method);
+    }
+
+    return $transaction_data;
+  }
+
+  /**
+   * Create a recurring payment transaction in bluesnap.
+   *
+   * Check whether the order is recurring or not and if yes
+   * make a recurring create/charge transaction in bluesnap.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return int
+   *   The BlueSnap response ID.
+   */
+  protected function recurringTransaction(PaymentInterface $payment) {
+    $order = $payment->getOrder();
+
+    // If recurring order,
+    // use merchant managed subscription charge API.
+    if ($this->isRecurring($order)) {
+      $client = $this->clientFactory->get(
+        SubscriptionChargeClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+
+      // Data required for a merchant managed subscription charge.
+      $data = $this->merchantManagedSubscriptionChargeData($payment);
+      $data['subscription_id'] = $this->subscriptionId($order);
+
+      $result = $client->create($data);
+
+      return $result->subscriptionId;
+    }
+
+    // If initial recurring order,
+    // use merchant managed subscription create API.
+    elseif ($this->isInitialRecurring($order)) {
+      $client = $this->clientFactory->get(
+        SubscriptionClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+
+      // Data required for a merchant managed subscription.
+      $data = $this->merchantManagedSubscriptionData($payment);
+
+      $result = $client->create($data);
+
+      return $result->subscriptionId;
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Prepares the transaction data required for blueSnap subscription API.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return array
+   *   The subscription transaction data array as required by BlueSnap.
+   */
+  protected function merchantManagedSubscriptionData(
+    PaymentInterface $payment
+  ) {
+    $payment_method = $payment->getPaymentMethod();
+
+    /** @var \Drupal\address\Plugin\Field\FieldType\AddressItem $address */
+    $address = $payment_method->getBillingProfile()->get('address')->first();
+
+    $amount = $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+
+    // Create the payment data.
+    $transaction_data = [
+      'currency' => $amount->getCurrencyCode(),
+      'amount' => $amount->getNumber(),
+    ];
+
+    // Add bluesnap level2/3 data to transaction.
+    $level_2_3_data = $this->dataLevel->getData(
+      $payment->getOrder(),
+      $payment_method->card_type->value
+    );
+    $transaction_data = $transaction_data + $level_2_3_data;
+
+    $payer_info = $this->prepareBillingContactInfo($payment_method);
+
+    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
+    // the payment data.
+    $owner = $payment_method->getOwner();
+    if ($owner && $owner->isAuthenticated()) {
+      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    }
+
+    // For anonymous users use bluesnap token.
+    else {
+      $payment_details['bluesnap_token'] = $payment_method->getRemoteId();
+      $transaction_data['paymentSource']['creditCardInfo'] =
+        $this->creditCardInfo($payment_method, $payment_details);
+
+      // Send the payerinfo
+      // First and last name are required.
+      $transaction_data['payerInfo'] = $payer_info;
     }
 
     return $transaction_data;
