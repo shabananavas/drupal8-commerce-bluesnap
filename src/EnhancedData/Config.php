@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\commerce_bluesnap\EnhancedDataLevel;
+namespace Drupal\commerce_bluesnap\EnhancedData;
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\ContentEntityInterface;

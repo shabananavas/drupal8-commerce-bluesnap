@@ -5,7 +5,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface;
+use Drupal\commerce_bluesnap\EnhancedData\DataInterface;
 use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
@@ -68,7 +68,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
   /**
    * The Bluesnap data level service.
    *
-   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface
+   * @var \Drupal\commerce_bluesnap\EnhancedData\DataInterface
    */
   protected $enhanced_data;
 
@@ -95,7 +95,7 @@ class HostedPaymentFields extends OnsitePaymentGatewayBase implements HostedPaym
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
    *   The Bluesnap fraud session process.
-   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\DataInterface $enhanced_data
+   * @param \Drupal\commerce_bluesnap\EnhancedData\DataInterface $enhanced_data
    *   The Bluesnap data level service.
    */
   public function __construct(

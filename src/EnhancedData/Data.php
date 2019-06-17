@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\commerce_bluesnap\EnhancedDataLevel;
+namespace Drupal\commerce_bluesnap\EnhancedData;
 
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
@@ -13,14 +13,14 @@ class Data implements DataInterface {
   /**
    * The BlueSnap enhanced data config.
    *
-   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface
+   * @var \Drupal\commerce_bluesnap\EnhancedData\ConfigInterface
    */
   protected $config;
 
   /**
    * Constructs a new Data object.
    *
-   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface $config
+   * @param \Drupal\commerce_bluesnap\EnhancedData\ConfigInterface $config
    *   The BlueSnap enhanced data config.
    */
   public function __construct(ConfigInterface $config) {

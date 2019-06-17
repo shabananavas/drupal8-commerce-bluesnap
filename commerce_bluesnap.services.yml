@@ -8,10 +8,10 @@ services:
     arguments: ['@logger.channel.commerce_bluesnap']
 
   commerce_bluesnap.enhanced_data_config:
-    class: Drupal\commerce_bluesnap\EnhancedDataLevel\Config
+    class: Drupal\commerce_bluesnap\EnhancedData\Config
 
   commerce_bluesnap.enhanced_data:
-    class: Drupal\commerce_bluesnap\EnhancedDataLevel\Data
+    class: Drupal\commerce_bluesnap\EnhancedData\Data
     arguments: ['@commerce_bluesnap.enhanced_data_config']
 
   commerce_bluesnap.fraud_session:
