@@ -54,7 +54,17 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
         $this->getBluesnapConfig()
       );
       $result = $client->create($this->cardTransactionData($payment, $capture));
+
+      // Save the vaulted shopper to the payment methods
+      // owner information.
+      if ($result->vaultedShopperId) {
+        $owner = $payment_method->getOwner();
+        $this->setRemoteCustomerId($owner, $result->vaultedShopperId);
+        $owner->save();
+      }
+
       $result_id = $result->id;
+
     }
 
     $next_state = $capture ? 'completed' : 'authorization';
@@ -144,31 +154,11 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       }
     }
 
-    // Create the payment method on BlueSnap.
-    $remote_payment_method = $this->doCreatePaymentMethod(
-      $payment_method,
-      $payment_details
-    );
-
-    // Save the remote details in the payment method.
-    // For auth users, get the card details from the remote payment method.
-    if ($remote_payment_method) {
-      // The card we added should be the last in the array.
-      // TODO: Ask BlueSnap support to confirm that this is always the case.
-      $card = end($remote_payment_method->paymentSources->creditCardInfo);
-      $card_type = $this->mapCreditCardType($card->creditCard->cardType);
-      $card_number = $card->creditCard->cardLastFourDigits;
-      $card_expiry_month = $card->creditCard->expirationMonth;
-      $card_expiry_year = $card->creditCard->expirationYear;
-    }
-    // For anon users, get the card details from the payment details.
-    else {
-      $card_type = $this->mapCreditCardType($payment_details['bluesnap_cc_type']);
-      $card_number = $payment_details['bluesnap_cc_last_4'];
-      $card_expiry = explode('/', $payment_details['bluesnap_cc_expiry']);
-      $card_expiry_month = $card_expiry[0];
-      $card_expiry_year = $card_expiry[1];
-    }
+    $card_type = $this->mapCreditCardType($payment_details['bluesnap_cc_type']);
+    $card_number = $payment_details['bluesnap_cc_last_4'];
+    $card_expiry = explode('/', $payment_details['bluesnap_cc_expiry']);
+    $card_expiry_month = $card_expiry[0];
+    $card_expiry_year = $card_expiry[1];
 
     // Save the payment method.
     $payment_method->card_type = $card_type;
@@ -202,17 +192,19 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     // Delete the card from the vaulted shopper on BlueSnap.
     $customer_id = $this->getRemoteCustomerId($owner);
-    $data = [
-      'cardLastFourDigits' => $payment_method->card_number->value,
-      'expirationMonth' => $payment_method->card_exp_month->value,
-      'expirationYear' => $payment_method->card_exp_year->value,
-    ];
+    if ($customer_id) {
+      $data = [
+        'cardLastFourDigits' => $payment_method->card_number->value,
+        'expirationMonth' => $payment_method->card_exp_month->value,
+        'expirationYear' => $payment_method->card_exp_year->value,
+      ];
 
-    $client = $this->clientFactory->get(
-      VaultedShoppersClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $result = $client->deleteCard($customer_id, $data);
+      $client = $this->clientFactory->get(
+        VaultedShoppersClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+      $result = $client->deleteCard($customer_id, $data);
+    }
 
     // Delete the local entity.
     $payment_method->delete();
@@ -242,103 +234,6 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     }
 
     return $map[$card_type];
-  }
-
-  /**
-   * Creates the payment method on the BlueSnap payment gateway.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   *
-   * @return array
-   *   The details of the entered credit card.
-   *
-   * @throws \Exception
-   */
-  protected function doCreatePaymentMethod(
-    PaymentMethodInterface $payment_method,
-    array $payment_details
-  ) {
-    $owner = $payment_method->getOwner();
-
-    // Authenticated user.
-    if ($owner && $owner->isAuthenticated()) {
-      return $this->doCreatePaymentMethodForAuthenticatedUser(
-        $payment_method,
-        $payment_details,
-        $this->getRemoteCustomerId($owner)
-      );
-    }
-
-    // Anonymous user.
-    // TODO: Why don't we create the payment method for anonymous users here?
-    return [];
-  }
-
-  /**
-   * Creates the payment method for an authenticated user.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   * @param string $customer_id
-   *   The BlueSnap customer ID.
-   *
-   * @return array
-   *   The details of the entered credit card.
-   *
-   * @throws \Exception
-   */
-  protected function doCreatePaymentMethodForAuthenticatedUser(
-    PaymentMethodInterface $payment_method,
-    array $payment_details,
-    $customer_id = NULL
-  ) {
-    $owner = $payment_method->getOwner();
-
-    $billing_info = $this->prepareBillingContactInfo($payment_method);
-
-    // Get the Vaulted Shopper API client.
-    $client = $this->clientFactory->get(
-      VaultedShoppersClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-
-    $credit_card_data = $this->creditCardInfo($payment_method, $payment_details);
-
-    // If this is an existing BlueSnap customer, use the token to create the new
-    // card.
-    if ($customer_id) {
-      // Add the card to the existing vaulted shopper.
-      $client->addCard($customer_id, $credit_card_data);
-    }
-    // If it's a new customer, create a new vaulted shopper on BlueSnap.
-    else {
-      $vaulted_shopper_billing = $this->prepareVaultedShopperBillingInfo($payment_method);
-
-      $data = $vaulted_shopper_billing + [
-        'transactionFraudInfo' => [
-          "fraudSessionId" => $this->fraudSession->get(),
-        ],
-        'paymentSources' => [
-          'creditCardInfo' => [
-            $credit_card_data,
-          ],
-        ],
-      ];
-
-      // Create a new vaulted shopper.
-      $vaulted_shopper = $client->create($data);
-
-      // Save the new customer ID.
-      $this->setRemoteCustomerId($owner, $vaulted_shopper->id);
-      $owner->save();
-
-      return $vaulted_shopper;
-    }
   }
 
   /**
@@ -389,24 +284,23 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     );
     $transaction_data = $transaction_data + $level_2_3_data;
 
-    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
-    // the payment data.
+    // If there is a vaulted shopper associated with the payment method
+    // use the vaulted shopper Id in transaction, if not use pftoken.
     // TODO: use pfToken instead.
     $owner = $payment_method->getOwner();
-    if ($owner && $owner->isAuthenticated()) {
-      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    $vaulted_shopper_id = $this->getRemoteCustomerId($owner);
+    if ($vaulted_shopper_id) {
+      $transaction_data['vaultedShopperId'] = $vaulted_shopper_id;
       $transaction_data['creditCard'] = [
         'cardLastFourDigits' => $payment_method->card_number->value,
         'cardType' => $payment_method->card_type->value,
       ];
     }
-    // If this is an anonymous user, use the BlueSnap token in the payment data.
     else {
       $transaction_data['pfToken'] = $payment_method->getRemoteId();
       // First and last name are required.
       $transaction_data['cardHolderInfo'] = $this->prepareBillingContactInfo($payment_method);
     }
-
     return $transaction_data;
   }
 
@@ -496,11 +390,12 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     $payer_info = $this->prepareBillingContactInfo($payment_method);
 
-    // If this is an authenticated user, use the BlueSnap vaulted shopper ID in
-    // the payment data.
+   // If there is a vaulted shopper associated with the payment method
+    // use the vaulted shopper Id in transaction, if not use pftoken.
     $owner = $payment_method->getOwner();
-    if ($owner && $owner->isAuthenticated()) {
-      $transaction_data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
+    $vaulted_shopper_id = $this->getRemoteCustomerId($owner);
+    if ($vaulted_shopper_id) {
+      $transaction_data['vaultedShopperId'] = $vaulted_shopper_id;
     }
 
     // For anonymous users use bluesnap token.
