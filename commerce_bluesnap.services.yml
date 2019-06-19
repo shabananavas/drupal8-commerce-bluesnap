@@ -7,12 +7,8 @@ services:
     class: Drupal\commerce_bluesnap\Api\ClientFactory
     arguments: ['@logger.channel.commerce_bluesnap']
 
-  commerce_bluesnap.enhanced_data_config:
-    class: Drupal\commerce_bluesnap\EnhancedDataLevel\Config
-
   commerce_bluesnap.enhanced_data:
-    class: Drupal\commerce_bluesnap\EnhancedDataLevel\Data
-    arguments: ['@commerce_bluesnap.enhanced_data_config']
+    class: Drupal\commerce_bluesnap\EnhancedData\Data
 
   commerce_bluesnap.fraud_session:
     class: Drupal\commerce_bluesnap\FraudPrevention\FraudSession

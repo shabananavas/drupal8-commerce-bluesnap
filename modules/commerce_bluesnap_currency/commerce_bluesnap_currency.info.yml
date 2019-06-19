@@ -1,0 +1,8 @@
+name: Commerce BlueSnap Currency
+type: module
+description: 'Provides currency resolver which fetches currency conversion rates from BlueSnap.'
+package: Commerce (contrib)
+core: 8.x
+dependencies:
+  - commerce_bluesnap:commerce_bluesnap
+  - commerce_currency_resolver:commerce_currency_resolver

@@ -1,37 +1,14 @@
 <?php
 
-namespace Drupal\commerce_bluesnap\EnhancedDataLevel;
+namespace Drupal\commerce_bluesnap\EnhancedData;
 
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 
 /**
- * Bluesnap enhanced data class.
- *
- * Bluesnap's Enhanced data levels, such as Level 2 and Level 3,
- * require extra information to process the transaction .
- * This service provides methods for getting
- * level 2 or level 3 data depending on the
- * card type and store/product variation settings.
+ * Default implementation of the enhanced data service.
  */
 class Data implements DataInterface {
-
-  /**
-   * The BlueSnap enhanced data config.
-   *
-   * @var \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface
-   */
-  protected $config;
-
-  /**
-   * Constructs a new blueSnap enhanced data object.
-   *
-   * @param \Drupal\commerce_bluesnap\EnhancedDataLevel\ConfigInterface $config
-   *   The BlueSnap enhanced data config.
-   */
-  public function __construct(ConfigInterface $config) {
-    $this->config = $config;
-  }
 
   /**
    * {@inheritdoc}
@@ -40,20 +17,20 @@ class Data implements DataInterface {
     $output = [];
 
     // Get the blueSnap enhanced data level.
-    // Proceed only if enhanced data is set in either store
-    // or product variation config.
+    // Proceed only if enhanced data is set in either store or product variation
+    // config.
     $data_level = $this->dataLevel($order);
-    if (!($data_level)) {
+    if (!$data_level) {
       return $output;
     }
 
     // Build and return the data depending on the configured level.
-    $is_level_3 = $data_level === ConfigInterface::LEVEL_3_ID;
+    $is_level_3 = $data_level === DataInterface::LEVEL_3_ID;
     if ($is_level_3 && $this->cardTypeSupportsLevel3($card_type)) {
       $output['level3Data'] = $this->level3Data($order, $card_type);
       return $output;
     }
-    $is_level_2 = $data_level === ConfigInterface::LEVEL_2_ID;
+    $is_level_2 = $data_level === DataInterface::LEVEL_2_ID;
     if ($is_level_2 && $this->cardTypeSupportsLevel2($card_type)) {
       $output['level2Data'] = $this->level2Data($order, $card_type);
       return $output;
@@ -63,55 +40,93 @@ class Data implements DataInterface {
   }
 
   /**
-   * Returns data level if enhanced data is set, FALSE otherwise.
+   * Returns the data level for the given order.
    *
-   * For a given order, checks whether the enhanced data is
-   * set in store level. Store level setting takes priority over
-   * SKU level setting, hence the enhanced data status will be
-   * considered as true for the order if it is set in store level.
-   * If enhanced data is not set in store level
-   * we loop through each product in the order to see if there is atleast
-   * one product which have enhanced data set.
-   * If yes enhanced data status will beconsidered
-   * as true for the entire order.
+   * Enhanced data levels are configured either at the store or at the product
+   * variation level. If the data level is set at the store level, transactions
+   * for orders belonging to the store will contain enhanced data with minimum
+   * level that of the store. If data levels are additionally configured for one
+   * or more of the purchased entities for the order items, the level may be
+   * increased if at least one variation requires so.
+   *
+   * If enhanced data are not configured to be required at the store level,
+   * transactions for orders belonging to the store will not contain enhanced
+   * data unless required by one or more of the purchased entities of the
+   * order.
+   *
+   * Examples:
+   * - Store determines Level 2. No purchased entity determines a level. Result
+   *   is Level 2.
+   * - Store determines Level 2. At least one purchased entity determines level
+   *   3. Result is Level 3.
+   * - Store does not determine a level. No purchased entity determines a
+   *   level. Result is no enhanced data sent.
+   * - Store does not determine a level. At least one purchased entity
+   *   determines Level 2. Result is Level 2.
+   * - Store does not determine a level. Some purchased entities determine Level
+   *   2 and one purchased entity determines Level 3. Result is Level 3.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order object for which we are checking the enhanced data status.
    *
-   * @return int|bool
-   *   data level if enhanced data is set for the order, FALSE otherwise.
+   * @return string|null
+   *   The data level, NULL if none could be determined for the order.
    */
   protected function dataLevel(OrderInterface $order) {
+    $level = NULL;
     $store = $order->getStore();
-    // Get enhanced data settings for the store.
-    $settings = $this->config->getSettings($store);
 
-    if ($settings->status) {
-      return $settings->level;
+    $store_settings = $store->get('bluesnap_config')['enhanced_data'];
+    if ($store_settings['status']) {
+      $level = $store_settings['level'];
     }
 
-    // If enhanced data level is turned off in store,
-    // we iterate through each product to see
-    // if anyone of the product in the order has
-    // enhanced data level turned on.
+    // No higher level than 3; if the store determines level 3 then we include
+    // level 3 data for all orders belonging to the store regardless of the
+    // settings at the purchased entity level.
+    if ($level === DataInterface::LEVEL_3_ID) {
+      return $level;
+    }
+
+    // Otherwise, if no level is determined at the store level or we have level
+    // 2, we check if we have settings requiring a higher level for any of the
+    // purchased entities for the order items.
     foreach ($order->getItems() as $order_item) {
-      if (!($order_item->hasPurchasedEntity())) {
+      if (!$order_item->hasPurchasedEntity()) {
         continue;
       }
 
       $purchased_entity = $order_item->getPurchasedEntity();
 
-      // Get enhanced data settings for product.
-      $settings = $this->config->getSettings($purchased_entity);
-      if (!($settings->status)) {
+      // Not all variation types can define their own enhanced data
+      // configuration. Purchased entities may also be of other types than
+      // product variations, such as product bundles.
+      if (!$purchased_entity->hasField('bluesnap_config_enhanced_data')) {
         continue;
       }
 
-      $data_level = $settings->level;
-      return $data_level;
+      // Get enhanced data settings for product.
+      $item_settings = $purchased_entity->get('bluesnap_config_enhanced_data');
+      if (!$item_settings['status']) {
+        continue;
+      }
+
+      // If at least one item requires level 3, nothing more to do. We determine
+      // level 3 for the order.
+      if ($item_settings['level'] === DataInterface::LEVEL_3_ID) {
+        return DataInterface::LEVEL_3_ID;
+      }
+
+      // Otherwise, the level must already be level 2 (in which case there's
+      // nothing to do here - move on to the next item), or it must not be
+      // previously set (in which case we set it to level 2 that is the level we
+      // require here).
+      if (!$level) {
+        $level = $item_settings['level'];
+      }
     }
 
-    return FALSE;
+    return $level;
   }
 
   /**
@@ -497,7 +512,7 @@ class Data implements DataInterface {
    * @param array $adjustments
    *   Array of adjustments.
    *
-   * @return int
+   * @return string|null
    *   Sum of tax rates, NULL if no percentage tax found
    */
   protected function getTaxRateTotal(array $adjustments) {
@@ -512,7 +527,7 @@ class Data implements DataInterface {
       // the whole tax is not considered a percentage. Do not pass the tax rate
       // property to BlueSnap.
       if ($percentage === NULL) {
-        return NULL;
+        return;
       }
 
       $total_tax_rate += $tax->getPercentage();

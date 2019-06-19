@@ -5,12 +5,16 @@
  * Provides Commerce integration with the BlueSnap Payment Gateway.
  */
 
-use Drupal\Core\Entity\EntityTypeInterface;
-use Drupal\Core\Entity\EntityFormInterface;
-use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\commerce_bluesnap\ConfigHelper;
+use Drupal\commerce_store\Entity\StoreTypeInterface;
+
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Url;
+
+/**
+ * Hooks.
+ */
 
 /**
  * Implements hook_help().
@@ -41,89 +45,88 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
 }
 
 /**
- * Implements hook_entity_base_field_info().
+ * Implements hook_form_FORM_ID_alter().
  */
-function commerce_bluesnap_entity_base_field_info(
-    EntityTypeInterface $entity_type
+function commerce_bluesnap_form_commerce_store_type_form_alter(
+  array &$form,
+  FormStateInterface $form_state
 ) {
-  if ($entity_type->id() !== 'commerce_store'
-    && $entity_type->id() !== 'commerce_product_variation') {
-    return;
-  }
+  $store_type = $form_state->getFormObject()->getEntity();
 
-  // Add bluesnap data level service settings field.
-  $fields['bluesnap_settings'] = BaseFieldDefinition::create('string_long')
-    ->setLabel(t('Bluesnap settings'))
-    ->setDisplayOptions('view', [
-      'region' => 'hidden',
-    ])
-    ->setDisplayOptions('form', [
-      'region' => 'hidden',
-    ])
-    ->setDisplayConfigurable('form', TRUE)
-    ->setDisplayConfigurable('view', TRUE);
-
-  return $fields;
-}
-
-/**
- * Implements hook_form_alter().
- */
-function commerce_bluesnap_form_alter(
-  &$form,
-  FormStateInterface $form_state,
-  $form_id
-) {
-  // Early return if we are not dealing with a entity form.
-  $form_object = $form_state->getFormObject();
-  if (!($form_object instanceof EntityFormInterface)) {
-    return;
-  }
-
-  // We are currently interested only in product variation
-  // and store entity types.
-  $entity_type = $form_object->getEntity()->getEntityTypeId();
-  if ($entity_type != 'commerce_product_variation' &&
-    $entity_type != 'commerce_store') {
-    return;
-  }
-
-  // Add a form wrapper element for bluesnap settings.
   $form['bluesnap'] = [
     '#type' => 'details',
-    '#title' => t('Bluesnap settings'),
+    '#title' => t('BlueSnap settings'),
     '#open' => TRUE,
-    '#tree' => TRUE,
+  ];
+  $form['bluesnap']['bluesnap_status'] = [
+    '#type' => 'checkbox',
+    '#title' => t('Make BlueSnap configuration available to stores of this type'),
+    '#default_value' => $store_type->getThirdPartySetting(
+      'commerce_bluesnap',
+      'status',
+      FALSE
+    ),
   ];
 
-  // Build the BlueSnap data level settings form fields.
-  $enhanced_data_config = \Drupal::service('commerce_bluesnap.enhanced_data_config');
-  $form['bluesnap']['data_level'] = $enhanced_data_config->buildSettingsForm($form_state);
-
-  // Execute our submit handler first.
-  array_unshift(
-    $form['actions']['submit']['#submit'],
-    'commerce_bluesnap_form_commerce_bluesnap_settings_form_submit'
-  );
-
-  // We need kount settings only in store entity.
-  if ($entity_type === 'commerce_store') {
-    // Build the BlueSnap Kount settings form fields.
-    $kount_account = \Drupal::service('commerce_bluesnap.kount_account');
-    $form['bluesnap']['kount'] = $kount_account->buildSettingsForm($form_state);
-  }
+  // Add custom submit handler so that we can save our setting.
+  $form['actions']['submit']['#submit'][] = '_commerce_bluesnap_store_type_form_submit';
 }
 
 /**
- * Form submit for the blueSnap settings form.
+ * Callbacks and private API.
  */
-function commerce_bluesnap_form_commerce_bluesnap_settings_form_submit(
-    $form,
-    FormStateInterface $form_state
-) {
-  $bluesnap = $form_state->getValue('bluesnap');
 
-  // Save blueSnap settings as json encoded string.
-  $store = $form_state->getFormObject()->getEntity();
-  $store->set('bluesnap_settings', json_encode($bluesnap));
+/**
+ * Submit handler for the store type add/edit forms.
+ */
+function _commerce_bluesnap_store_type_form_submit(
+  $form,
+  FormStateInterface $form_state
+) {
+  $store_type = $form_state->getFormObject()->getEntity();
+
+  $status = $form_state->getValue('bluesnap_status');
+
+  // Install the BlueSnap configuration field if configuration is enabled for
+  // this store type.
+  // TODO: Remove field when disabling and if there are no data already in the
+  // field.
+  if ($status) {
+    _commerce_bluesnap_store_type_add_config_field($store_type);
+  }
+
+  // Save our third party settings for the order type.
+  $store_type->setThirdPartySetting(
+    'commerce_bluesnap',
+    'status',
+    $status
+  );
+  $store_type->save();
+}
+
+/**
+ * Creates the BlueSnap configuration field for the given store type.
+ *
+ * TODO: Consider moving this to a service; but let's leave it here for now
+ * until we see where else we may be storing configuration so that we determine
+ * where's the best way to architect such service.
+ */
+function _commerce_bluesnap_store_type_add_config_field(
+  StoreTypeInterface $store_type
+) {
+  $field_definitions = \Drupal::service('entity_field.manager')
+    ->getFieldDefinitions('commerce_store', $store_type->id());
+
+  if (!isset($field_definitions['bluesnap_config'])) {
+    $field_definition = ConfigHelper::fieldDefinition('BlueSnap settings')
+      ->setTargetEntityTypeId('commerce_store')
+      ->setTargetBundle($store_type->id())
+      ->setName('bluesnap_config')
+      ->setDisplayOptions('form', [
+        'type' => 'bluesnap_config_store',
+        'region' => 'hidden',
+      ]);
+    $configurable_field_manager = \Drupal::service('commerce.configurable_field_manager');
+    $configurable_field_manager->createField($field_definition);
+  }
 }
