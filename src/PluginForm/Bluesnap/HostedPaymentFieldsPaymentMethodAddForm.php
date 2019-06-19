@@ -4,7 +4,6 @@ namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
-use Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface;
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 
 use Drupal\commerce\InlineFormManager;
@@ -38,13 +37,6 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    */
   protected $fraudSession;
 
-   /**
-   * The Kount account service.
-   *
-   * @var \Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface
-   */
-  protected $kountAccount;
-
   /**
    * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
    *
@@ -60,8 +52,6 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *   The BlueSnap API client factory.
    * @param Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
    *   The fraud session service.
-   * @param Drupal\commerce_bluesnap\FraudPrevention\KountAccountInterface $kount_account
-   *   The Kount account service.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
@@ -69,8 +59,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
     ClientFactory $client_factory,
-    FraudSessionInterface $fraud_session,
-    KountAccountInterface $kount_account
+    FraudSessionInterface $fraud_session
   ) {
     parent::__construct(
       $inline_form_manager,
@@ -81,7 +70,6 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
 
     $this->clientFactory = $client_factory;
     $this->fraudSession = $fraud_session;
-    $this->kountAccount = $kount_account;
   }
 
   /**
@@ -94,8 +82,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
       $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.fraud_session'),
-      $container->get('commerce_bluesnap.kount_account')
+      $container->get('commerce_bluesnap.fraud_session')
     );
   }
 
@@ -267,14 +254,14 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected function deviceDataCollectorIframe() {
     // Get the Kount merchant ID from the store settings, if we have one
     // available for Enterprise accounts. We use the store for the current order,
-    // or the default store if we can't determine the order from the route.
+    // or the default store if we can't determine the store from the route.
     if ($order = $this->routeMatch->getParameter('commerce_order')) {
       $store = $order->getStore();
     }
     else {
       $store = $this->storeStorage->loadDefault();
     }
-    $merchant_id = $this->kountAccount->getMerchantId($store);
+    $merchant_id = $store->get('bluesnap_config')->value['kount']['merchant_id'];
 
     $mode = $this->entity
      ->getPaymentGateway()

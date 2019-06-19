@@ -64,8 +64,8 @@ class FraudSession implements FraudSessionInterface {
 
     // Prepare the iframe template. The query parameters passed to the iframe's
     // and image's src tags depend on whether we have a custom merchant ID
-    // (enterprise accounts) or not. In the latter case we do not pass a merchant
-    // ID and BlueSnap will use a default merchant ID.
+    // (enterprise accounts) or not. In the latter case we do not
+    // pass a merchant ID and BlueSnap will use a default merchant ID.
     $params = $this->iframeParams($kount_merchant_id);
     $iframe = '
       <iframe
@@ -94,7 +94,7 @@ class FraudSession implements FraudSessionInterface {
    * It includes the Kount merchant ID if we have one, it only includes the
    * fraud session otherwise.
    *
-   * @param string|null $koung_merchant_id
+   * @param string|null $kount_merchant_id
    *   The Kount merchant Id, if we have one (enterprise accounts); NULL
    *   otherwise.
    *

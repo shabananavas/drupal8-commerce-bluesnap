@@ -13,6 +13,3 @@ services:
   commerce_bluesnap.fraud_session:
     class: Drupal\commerce_bluesnap\FraudPrevention\FraudSession
     arguments: ['@tempstore.private']
-
-  commerce_bluesnap.kount_account:
-    class: Drupal\commerce_bluesnap\FraudPrevention\KountAccount
