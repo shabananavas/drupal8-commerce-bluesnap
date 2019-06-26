@@ -69,6 +69,16 @@ class StoreConfigWidget extends WidgetBase {
       '#default_value' => $level_default_value,
     ];
 
+    // Kount account settings.
+    $element['kount']['merchant_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Kount merchant ID'),
+      '#description' => $this->t(
+        "If you are using Kount Enterprise, please provide your Kount merchant ID."
+      ),
+      '#default_value' => $settings['kount']['merchant_id'] ? $settings['kount']['merchant_id'] : FALSE,
+    ];
+
     return $element;
   }
 
@@ -91,6 +101,9 @@ class StoreConfigWidget extends WidgetBase {
         'enhanced_data' => [
           'status' => $values[0]['enhanced_data']['status'],
           'level' => $level,
+        ],
+        'kount' => [
+          'merchant_id' => $values[0]['kount']['merchant_id'],
         ],
       ],
     ];

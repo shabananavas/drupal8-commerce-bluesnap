@@ -11,5 +11,5 @@ services:
     class: Drupal\commerce_bluesnap\EnhancedData\Data
 
   commerce_bluesnap.fraud_session:
-    class: Drupal\commerce_bluesnap\FraudSession
+    class: Drupal\commerce_bluesnap\FraudPrevention\FraudSession
     arguments: ['@tempstore.private']
