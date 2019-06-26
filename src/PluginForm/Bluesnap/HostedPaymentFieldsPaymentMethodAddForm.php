@@ -252,6 +252,12 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *  Render array which has bluesnap device datacollector iframe markup.
    */
   protected function deviceDataCollectorIframe() {
+    $merchant_id = NULL;
+    $mode = $this->entity
+     ->getPaymentGateway()
+     ->getPlugin()
+     ->getBluesnapConfig()['env'];
+
     // Get the Kount merchant ID from the store settings, if we have one
     // available for Enterprise accounts. We use the store for the current order,
     // or the default store if we can't determine the store from the route.
@@ -261,12 +267,11 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
     else {
       $store = $this->storeStorage->loadDefault();
     }
-    $merchant_id = $store->get('bluesnap_config')->value['kount']['merchant_id'];
 
-    $mode = $this->entity
-     ->getPaymentGateway()
-     ->getPlugin()
-     ->getBluesnapConfig()['env'];
+    $store_config = $store->get('bluesnap_config')->value;
+    if (!empty($store_config['kount']['merchant_id'])) {
+      $merchant_id = $store_config['kount']['merchant_id'];
+    }
 
     return $this->fraudSession->iframe($mode, $merchant_id);
   }
