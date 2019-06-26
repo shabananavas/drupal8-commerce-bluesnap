@@ -73,9 +73,9 @@ class StoreConfigWidget extends WidgetBase {
     $element['kount']['merchant_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Kount merchant ID'),
-      '#description' => $this->t("
-        If you are using Kount Enterprise, please provide your Kount merchant ID.
-      "),
+      '#description' => $this->t(
+        "If you are using Kount Enterprise, please provide your Kount merchant ID."
+      ),
       '#default_value' => $settings['kount']['merchant_id'] ? $settings['kount']['merchant_id'] : FALSE,
     ];
 
