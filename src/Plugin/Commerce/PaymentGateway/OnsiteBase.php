@@ -4,10 +4,12 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
+use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
 use Drupal\commerce_price\Price;
 use Drupal\commerce_price\RounderInterface;
@@ -38,6 +40,13 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   protected $clientFactory;
 
   /**
+   * The BlueSnap IPN handler.
+   *
+   * @var \Drupal\commerce_bluesnap\Ipn\HandlerInterface
+   */
+  protected $ipnHandler;
+
+  /**
    * Constructs a new PaymentGatewayBase object.
    *
    * @param array $configuration
@@ -58,6 +67,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The rounder service.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
+   * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
+   *   The BlueSnap IPN handler.
    */
   public function __construct(
     array $configuration,
@@ -68,7 +79,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     RounderInterface $rounder,
-    ClientFactory $client_factory
+    ClientFactory $client_factory,
+    IpnHandlerInterface $ipn_handler
   ) {
     parent::__construct(
       $configuration,
@@ -82,6 +94,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
 
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
+    $this->ipnHandler = $ipn_handler;
   }
 
   /**
@@ -102,7 +115,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
       $container->get('commerce_price.rounder'),
-      $container->get('commerce_bluesnap.client_factory')
+      $container->get('commerce_bluesnap.client_factory'),
+      $container->get('commerce_bluesnap.ipn_handler')
     );
   }
 

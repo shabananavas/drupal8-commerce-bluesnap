@@ -4,8 +4,11 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\AltTransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Provides the Bluesnap ACH/ECP payment gateway.
@@ -138,6 +141,26 @@ class Ecp extends OnsiteBase {
     }
     // Delete the local entity.
     $payment_method->delete();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function onNotify(Request $request) {
+    $this->ipnHandler->checkRequestAccess($request);
+
+    // Get the IPN data and type.
+    $ipn_data = $this->ipnHandler->parseRequestData(
+      $request,
+      [IpnHandlerInterface::IPN_TYPE_CHARGE]
+    );
+    $ipn_type = $this->ipnHandler->getType($ipn_data);
+
+    // Delegate to the appropriate method based on type.
+    switch ($ipn_type) {
+      case IpnHandlerInterface::IPN_TYPE_CHARGE:
+        $this->ipnCharge($ipn_data);
+    }
   }
 
   /**
@@ -358,6 +381,30 @@ class Ecp extends OnsiteBase {
    */
   protected function truncateEcpNumber($number) {
     return substr($number, -5);
+  }
+
+  /**
+   * Acts when a CHARGE IPN is received.
+   *
+   * Sets the status of the payment to completed.
+   *
+   * @param array $ipn_data
+   *   The IPN request data.
+   */
+  protected function ipnCharge(array $ipn_data) {
+    $payment = $this->ipnHandler->getEntity($ipn_data);
+
+    // We only mark the payment as completed if it is currently in pending
+    // state. If it is refunded (fully or partially) or voided, there's
+    // something unexpected going on; maybe another action was taken before
+    // receiving the CHARGE IPN - even though that would be unusual.
+    $state = $payment->get('state')->first()->getId();
+    if ($state !== 'pending') {
+      return;
+    }
+
+    $payment->set('state', 'completed');
+    $payment->save();
   }
 
 }

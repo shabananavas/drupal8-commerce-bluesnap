@@ -13,3 +13,9 @@ services:
   commerce_bluesnap.fraud_session:
     class: Drupal\commerce_bluesnap\FraudPrevention\FraudSession
     arguments: ['@tempstore.private']
+
+  commerce_bluesnap.ipn_handler:
+    class: Drupal\commerce_bluesnap\Ipn\Handler
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.channel.commerce_bluesnap'
