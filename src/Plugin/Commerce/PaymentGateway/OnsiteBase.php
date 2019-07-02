@@ -4,6 +4,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
+use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
 use Drupal\commerce_payment\PaymentMethodTypeManager;
@@ -250,6 +251,63 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     $payment->setRefundedAmount($new_refunded_amount);
     $payment->save();
   }
+
+  /**
+   * Creates a Vaulted Shopper in BlueSnap based on the given payment method.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   * @param array $additional_data
+   *   An associative array with additional data that may depend on the gateway.
+   *
+   * @return array
+   *   The details of the created Vaulted Shopper.
+   */
+  protected function createVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details,
+    array $additional_data = []
+  ) {
+    // Prepare the data for the request.
+    $data = $this->prepareVaultedShopperBillingInfo($payment_method);
+    $data['paymentSources'] = $this->preparePaymentSourcesDataForVaultedShopper(
+      $payment_method,
+      $payment_details
+    );
+    $data += $additional_data;
+
+    // We pass the Drupal user ID as the merchant shopper ID, only for
+    // authenticated users.
+    $owner = $payment_method->getOwner();
+    if ($owner->isAuthenticated()) {
+      $data['merchantShopperId'] = $payment_method->getOwner()->id();
+    }
+
+    // Create and return the vaulted shopper.
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    return $client->create($data);
+  }
+
+  /**
+   * Prepares the payment sources data required for creating a Vaulted Shopper.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The details of the payment sources.
+   */
+  abstract protected function preparePaymentSourcesDataForVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  );
 
   /**
    * Prepares the billing contact info from the billing profile.

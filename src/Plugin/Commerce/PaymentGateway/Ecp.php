@@ -259,43 +259,18 @@ class Ecp extends OnsiteBase {
   }
 
   /**
-   * Creates a Vaulted Shopper in BlueSnap based on the given payment method.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   *
-   * @return array
-   *   The details of the created Vaulted Shopper.
+   * {@inheritdoc}
    */
-  protected function createVaultedShopper(
+  protected function preparePaymentSourcesDataForVaultedShopper(
     PaymentMethodInterface $payment_method,
     array $payment_details
   ) {
-    // Prepare the data for the request.
-    $data = $this->prepareVaultedShopperBillingInfo($payment_method);
-
-    // ECP data.
     $ecp_data = $this->prepareEcpDetails(
       $payment_method,
       $payment_details
     );
-    $data['paymentSources']['ecpDetails'] = [$ecp_data];
 
-    // We pass the Drupal user ID as the merchant shopper ID, only for
-    // authenticated users.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['merchantShopperId'] = $payment_method->getOwner()->id();
-    }
-
-    // Create and return the vaulted shopper.
-    $client = $this->clientFactory->get(
-      VaultedShoppersClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    return $client->create($data);
+    return ['ecpDetails' => [$ecp_data]];
   }
 
   /**
