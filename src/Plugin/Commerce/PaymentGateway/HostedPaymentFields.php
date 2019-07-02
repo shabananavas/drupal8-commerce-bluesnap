@@ -7,6 +7,8 @@ use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
 use Drupal\commerce_bluesnap\Api\SubscriptionChargeClientInterface;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
+use Drupal\commerce_bluesnap\EnhancedData\DataInterface;
+use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
 
 use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;

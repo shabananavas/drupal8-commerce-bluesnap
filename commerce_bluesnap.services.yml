@@ -7,9 +7,15 @@ services:
     class: Drupal\commerce_bluesnap\Api\ClientFactory
     arguments: ['@logger.channel.commerce_bluesnap']
 
-  commerce_bluesnap.data_level:
-    class: Drupal\commerce_bluesnap\DataLevel
+  commerce_bluesnap.enhanced_data:
+    class: Drupal\commerce_bluesnap\EnhancedData\Data
 
   commerce_bluesnap.fraud_session:
-    class: Drupal\commerce_bluesnap\FraudSession
+    class: Drupal\commerce_bluesnap\FraudPrevention\FraudSession
     arguments: ['@tempstore.private']
+
+  commerce_bluesnap.ipn_handler:
+    class: Drupal\commerce_bluesnap\Ipn\Handler
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.channel.commerce_bluesnap'

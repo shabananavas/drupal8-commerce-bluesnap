@@ -6,6 +6,7 @@ use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\FraudSessionInterface;
 use Drupal\commerce_bluesnap\DataLevelInterface;
+use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
 use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -64,6 +65,13 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   protected $dataLevel;
 
   /**
+   * The BlueSnap IPN handler.
+   *
+   * @var \Drupal\commerce_bluesnap\Ipn\HandlerInterface
+   */
+  protected $ipnHandler;
+
+  /**
    * Constructs a new HostedPaymentFields object.
    *
    * @param array $configuration
@@ -90,6 +98,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The Bluesnap data level service.
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
    *   The module handler.
+   *   The BlueSnap API client factory.
+   * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
+   *   The BlueSnap IPN handler.
    */
   public function __construct(
     array $configuration,
@@ -103,7 +114,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     ClientFactory $client_factory,
     FraudSessionInterface $fraud_session,
     DataLevelInterface $data_level,
-    ModuleHandlerInterface $module_handler
+    ModuleHandlerInterface $module_handler,
+    IpnHandlerInterface $ipn_handler
   ) {
     parent::__construct(
       $configuration,
@@ -120,6 +132,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     $this->fraudSession = $fraud_session;
     $this->dataLevel = $data_level;
     $this->moduleHandler = $module_handler;
+    $this->ipnHandler = $ipn_handler;
   }
 
   /**
@@ -142,7 +155,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.fraud_session'),
       $container->get('commerce_bluesnap.data_level'),
-      $container->get('module_handler')
+      $container->get('module_handler'),
+      $container->get('commerce_bluesnap.ipn_handler')
     );
   }
 

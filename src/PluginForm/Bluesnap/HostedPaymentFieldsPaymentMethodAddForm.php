@@ -3,8 +3,8 @@
 namespace Drupal\commerce_bluesnap\PluginForm\Bluesnap;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
 use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
-use Drupal\commerce_bluesnap\FraudSessionInterface;
 
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
@@ -33,7 +33,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   /**
    * The fraud session service.
    *
-   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
+   * @var \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface
    */
   protected $fraudSession;
 
@@ -50,7 +50,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
    *   The logger.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
-   * @param Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
+   * @param Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
    *   The fraud session service.
    */
   public function __construct(
@@ -149,9 +149,8 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#weight' => -200,
     ];
 
-    // Add bluesnap device datacollector iframe.
-    $mode = $this->entity->getPaymentGateway()->getPlugin()->getBluesnapConfig()['env'];
-    $element['fraud_prevention'] = $this->fraudSession->iframe($mode);
+    // Add bluesnap device datacollector iframe for fraud prevention.
+    $element['fraud_prevention'] = $this->deviceDataCollectorIframe();
 
     return $element;
   }
@@ -244,6 +243,37 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#validated' => TRUE,
       '#markup' => '<div class="form-control" id="cvv" data-bluesnap="cvv"></div>',
     ];
+  }
+
+  /**
+   * Provides bluesnap device data collector iframe.
+   *
+   * @return array
+   *  Render array which has bluesnap device datacollector iframe markup.
+   */
+  protected function deviceDataCollectorIframe() {
+    $merchant_id = NULL;
+    $mode = $this->entity
+     ->getPaymentGateway()
+     ->getPlugin()
+     ->getBluesnapConfig()['env'];
+
+    // Get the Kount merchant ID from the store settings, if we have one
+    // available for Enterprise accounts. We use the store for the current order,
+    // or the default store if we can't determine the store from the route.
+    if ($order = $this->routeMatch->getParameter('commerce_order')) {
+      $store = $order->getStore();
+    }
+    else {
+      $store = $this->storeStorage->loadDefault();
+    }
+
+    $store_config = $store->get('bluesnap_config')->value;
+    if (!empty($store_config['kount']['merchant_id'])) {
+      $merchant_id = $store_config['kount']['merchant_id'];
+    }
+
+    return $this->fraudSession->iframe($mode, $merchant_id);
   }
 
 }
