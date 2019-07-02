@@ -241,44 +241,6 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
   /**
    * {@inheritdoc}
    */
-  public function refundPayment(
-    PaymentInterface $payment,
-    Price $amount = NULL
-  ) {
-    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
-    // If not specified, refund the entire amount.
-    $amount = $amount ?: $payment->getAmount();
-    // Round the amount as it can be manually entered via the Refund form.
-    $amount = $this->rounder->round($amount);
-    $this->assertRefundAmount($payment, $amount);
-
-    // Refund the payment transaction on BlueSnap.
-    $transaction_data = [
-      'amount' => $amount->getNumber(),
-    ];
-    $client = $this->clientFactory->get(
-      TransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $client->refund($payment->getRemoteId(), $transaction_data);
-
-    // Update the payment.
-    $old_refunded_amount = $payment->getRefundedAmount();
-    $new_refunded_amount = $old_refunded_amount->add($amount);
-    if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->setState('partially_refunded');
-    }
-    else {
-      $payment->setState('refunded');
-    }
-
-    $payment->setRefundedAmount($new_refunded_amount);
-    $payment->save();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function createPaymentMethod(
     PaymentMethodInterface $payment_method,
     array $payment_details

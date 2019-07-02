@@ -213,11 +213,6 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
 
   /**
    * {@inheritdoc}
-   *
-   * This is added here instead of in the ECP gateway because it is exactly
-   * the same as the corresponding function for the Hosted Payment Fields
-   * gateway. The idea is to eventually base the Hosted Payment Fields on this
-   * class as well.
    */
   public function refundPayment(
     PaymentInterface $payment,
