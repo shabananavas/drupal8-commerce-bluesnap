@@ -76,9 +76,14 @@ class Data implements DataInterface {
     $level = NULL;
     $store = $order->getStore();
 
-    $store_settings = $store->get('bluesnap_config')['enhanced_data'];
-    if ($store_settings['status']) {
-      $level = $store_settings['level'];
+    if ($store->hasField('bluesnap_config')) {
+      $config_field = $store->get('bluesnap_config');
+      if (!$config_field->isEmpty()) {
+        $store_settings = $config_field->value['enhanced_data'];
+      }
+      if (isset($store_settings) && $store_settings['status']) {
+        $level = $store_settings['level'];
+      }
     }
 
     // No higher level than 3; if the store determines level 3 then we include
@@ -106,7 +111,12 @@ class Data implements DataInterface {
       }
 
       // Get enhanced data settings for product.
-      $item_settings = $purchased_entity->get('bluesnap_config_enhanced_data');
+      $item_settings_field = $purchased_entity->get('bluesnap_config_enhanced_data');
+      if ($item_settings_field->isEmpty()) {
+        continue;
+      }
+
+      $item_settings = $item_settings_field->value;
       if (!$item_settings['status']) {
         continue;
       }
