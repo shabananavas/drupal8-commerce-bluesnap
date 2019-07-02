@@ -35,7 +35,7 @@ class Ecp extends OnsiteBase {
     $this->assertPaymentMethod($payment_method);
 
     // Prepare the data required to process an ACH/ECP transaction.
-    $data = $this->prepareTransactionData($payment, $payment_method, $amount);
+    $data = $this->prepareTransactionData($payment, $payment_method);
 
     // We create Vaulted Shoppers for both authenticated and anonymous. For
     // authenticated users we store the Vaulted Shopper ID as the user's remote
@@ -56,7 +56,8 @@ class Ecp extends OnsiteBase {
     );
     $result = $client->create($data);
 
-    // Mark the payment as completed.
+    // Mark the payment as pending; it will be marked as completed when we
+    // receive the IPN signaling the payment was captured successfully.
     $payment->setState('pending');
     $payment->setRemoteId($result->id);
     $payment->save();
@@ -231,7 +232,7 @@ class Ecp extends OnsiteBase {
    * Creates the payment method for a user without an existing Vaulted Shopper.
    *
    * Creates a new Vaulted Shopper with the ECP payment source in BlueSnap and
-   * it stores its ID in the .
+   * it stores its ID in the user's gateway remote ID.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
    *   The payment method.
