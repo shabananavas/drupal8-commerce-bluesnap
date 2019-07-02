@@ -104,7 +104,10 @@ class Handler implements HandlerInterface {
    */
   protected function getGroupType(array $ipn_data) {
     $ipn_type = $this->getType($ipn_data);
-    $payment_ipn_types = [self::IPN_TYPE_CHARGE];
+    $payment_ipn_types = [
+      self::IPN_TYPE_CHARGE,
+      self::IPN_TYPE_REFUND,
+    ];
 
     if (in_array($ipn_type, $payment_ipn_types)) {
       return self::IPN_GROUP_TRANSACTION;

@@ -337,6 +337,18 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    * {@inheritdoc}
    */
   public function onNotify(Request $request) {
+    // Get the IPN data and type.
+    $ipn_data = $this->ipnHandler->parseRequestData(
+      $request,
+      [IpnHandlerInterface::IPN_TYPE_REFUND]
+    );
+    $ipn_type = $this->ipnHandler->getType($ipn_data);
+
+    // Delegate to the appropriate method based on type.
+    switch ($ipn_type) {
+      case IpnHandlerInterface::IPN_TYPE_REFUND:
+        $this->ipnRefund($ipn_data);
+    }
   }
 
   /**
@@ -584,6 +596,62 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'pfToken' => $payment_details['bluesnap_token'],
     ];
+  }
+
+  /**
+   * Acts when a REFUND IPN is received.
+   *
+   * Note: Exactly the same for both Hosted Payment Fields and ECP
+   * gateways. Consider reviewing the IPN system and move to the OnsiteBase
+   * class.
+   *
+   * @param array $ipn_data
+   *   The IPN request data.
+   */
+  protected function ipnRefund(array $ipn_data) {
+    $payment = $this->ipnHandler->getEntity($ipn_data);
+
+    // Get the refund amount.
+    $refund_amount = new Price(
+      $ipn_data['invoiceChargeAmount'],
+      $ipn_data['invoiceChargeCurrency']
+    );
+
+    // The refund amount should always be given at the currency of the
+    // transaction. If not, there's something wrong.
+    $payment_amount = $payment->getAmount();
+    if ($payment_amount->getCurrencyCode() !== $refund_amount->getCurrencyCode()) {
+      $message = sprintf(
+        'The currency for the refund received for payment with ID "%s" was "s", "%s" expected',
+        $payment->id(),
+        $refund_amount->getCurrencyCode(),
+        $payment_amount->getCurrencyCode()
+      );
+      throw new \InvalidArgumentException($message);
+    }
+
+    // Update the payment.
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($refund_amount);
+
+    // It's a full refund if BlueSnap tells us so or if we calculate so.
+    $is_full_refund = FALSE;
+    if (isset($ipn_data['fullRefund']) && $ipn_data['fullRefund'] === 'Y') {
+      $is_full_refund = TRUE;
+    }
+    elseif (!$new_refunded_amount->lessThan($payment_amount)) {
+      $is_full_refund = TRUE;
+    }
+
+    if ($is_full_refund) {
+      $payment->setState('refunded');
+    }
+    else {
+      $payment->setState('partially_refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
   }
 
 }

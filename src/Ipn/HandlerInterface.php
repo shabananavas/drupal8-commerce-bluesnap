@@ -20,6 +20,11 @@ interface HandlerInterface {
   const IPN_TYPE_CHARGE = 'CHARGE';
 
   /**
+   * Indicates the IPN for a refund on a transaction.
+   */
+  const IPN_TYPE_REFUND = 'REFUND';
+
+  /**
    * Indicates an IPN that is relevant to a transaction.
    *
    * IPN groups is not a BlueSnap concept. We use this in the handler to
