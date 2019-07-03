@@ -4,8 +4,7 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
-use Drupal\commerce_bluesnap\FraudSessionInterface;
-use Drupal\commerce_bluesnap\DataLevelInterface;
+use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
 use Drupal\commerce_order\Entity\Order;
@@ -30,6 +29,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInterface {
 
   /**
+   * The module handler.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler;
+
+  /**
    * The rounder.
    *
    * @var \Drupal\commerce_price\RounderInterface
@@ -42,27 +48,6 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    * @var \Drupal\commerce_bluesnap\Api\ClientFactory
    */
   protected $clientFactory;
-
-  /**
-   * The Bluesnap fraud session process.
-   *
-   * @var \Drupal\commerce_bluesnap\FraudSessionInterface
-   */
-  protected $fraudSession;
-
-  /**
-   * The module handler.
-   *
-   * @var \Drupal\Core\Extension\ModuleHandlerInterface
-   */
-  protected $moduleHandler;
-
-  /**
-   * The Bluesnap data level service.
-   *
-   * @var \Drupal\commerce_bluesnap\DataLevelInterface
-   */
-  protected $dataLevel;
 
   /**
    * The BlueSnap IPN handler.
@@ -88,17 +73,12 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The payment method type manager.
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   The module handler.
    * @param \Drupal\commerce_price\RounderInterface $rounder
    *   The rounder.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The Bluesnap API client factory.
-   * @param \Drupal\commerce_bluesnap\FraudSessionInterface $fraud_session
-   *   The Bluesnap fraud session process.
-   * @param \Drupal\commerce_bluesnap\DataLevelInterface $data_level
-   *   The Bluesnap data level service.
-   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
-   *   The module handler.
-   *   The BlueSnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
    *   The BlueSnap IPN handler.
    */
@@ -110,11 +90,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     PaymentTypeManager $payment_type_manager,
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
+    ModuleHandlerInterface $module_handler,
     RounderInterface $rounder,
     ClientFactory $client_factory,
-    FraudSessionInterface $fraud_session,
-    DataLevelInterface $data_level,
-    ModuleHandlerInterface $module_handler,
     IpnHandlerInterface $ipn_handler
   ) {
     parent::__construct(
@@ -127,11 +105,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $time
     );
 
+    $this->moduleHandler = $module_handler;
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
-    $this->fraudSession = $fraud_session;
-    $this->dataLevel = $data_level;
-    $this->moduleHandler = $module_handler;
     $this->ipnHandler = $ipn_handler;
   }
 
@@ -151,49 +127,11 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
+      $container->get('module_handler'),
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.fraud_session'),
-      $container->get('commerce_bluesnap.data_level'),
-      $container->get('module_handler'),
       $container->get('commerce_bluesnap.ipn_handler')
     );
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function refundPayment(
-    PaymentInterface $payment,
-    Price $amount = NULL
-  ) {
-    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
-    // If not specified, refund the entire amount.
-    $amount = $amount ?: $payment->getAmount();
-    // Round the amount as it can be manually entered via the Refund form.
-    $amount = $this->rounder->round($amount);
-    $this->assertRefundAmount($payment, $amount);
-
-    // Refund the payment transaction on BlueSnap.
-    $data = ['amount' => $amount->getNumber()];
-    $client = $this->clientFactory->get(
-      TransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $client->refund($payment->getRemoteId(), $data);
-
-    // Update the payment.
-    $old_refunded_amount = $payment->getRefundedAmount();
-    $new_refunded_amount = $old_refunded_amount->add($amount);
-    if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->setState('partially_refunded');
-    }
-    else {
-      $payment->setState('refunded');
-    }
-
-    $payment->setRefundedAmount($new_refunded_amount);
-    $payment->save();
   }
 
   /**
@@ -285,6 +223,99 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   protected function getPassword() {
     return $this->configuration['password'] ?: '';
   }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function refundPayment(
+    PaymentInterface $payment,
+    Price $amount = NULL
+  ) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    // Round the amount as it can be manually entered via the Refund form.
+    $amount = $this->rounder->round($amount);
+    $this->assertRefundAmount($payment, $amount);
+
+    // Refund the payment transaction on BlueSnap.
+    $data = ['amount' => $amount->getNumber()];
+    $client = $this->clientFactory->get(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $client->refund($payment->getRemoteId(), $data);
+
+    // Update the payment.
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->setState('partially_refunded');
+    }
+    else {
+      $payment->setState('refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
+  }
+
+  /**
+   * Creates a Vaulted Shopper in BlueSnap based on the given payment method.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   * @param array $additional_data
+   *   An associative array with additional data that may depend on the gateway.
+   *
+   * @return array
+   *   The details of the created Vaulted Shopper.
+   */
+  protected function createVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details,
+    array $additional_data = []
+  ) {
+    // Prepare the data for the request.
+    $data = $this->prepareVaultedShopperBillingInfo($payment_method);
+    $data['paymentSources'] = $this->preparePaymentSourcesDataForVaultedShopper(
+      $payment_method,
+      $payment_details
+    );
+    $data += $additional_data;
+
+    // We pass the Drupal user ID as the merchant shopper ID, only for
+    // authenticated users.
+    $owner = $payment_method->getOwner();
+    if ($owner->isAuthenticated()) {
+      $data['merchantShopperId'] = $payment_method->getOwner()->id();
+    }
+
+    // Create and return the vaulted shopper.
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    return $client->create($data);
+  }
+
+  /**
+   * Prepares the payment sources data required for creating a Vaulted Shopper.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
+   *   The payment method.
+   * @param array $payment_details
+   *   The gateway-specific payment details.
+   *
+   * @return array
+   *   The details of the payment sources.
+   */
+  abstract protected function preparePaymentSourcesDataForVaultedShopper(
+    PaymentMethodInterface $payment_method,
+    array $payment_details
+  );
 
   /**
    * Prepares the billing contact info from the billing profile.
@@ -399,7 +430,6 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   TRUE if order is initial recurring, FALSE if not.
    */
   protected function isInitialRecurring(Order $order) {
-
     // If commerce recurring module is not installed exit early.
     if (!$this->moduleHandler->moduleExists('commerce_recurring')) {
       return TRUE;

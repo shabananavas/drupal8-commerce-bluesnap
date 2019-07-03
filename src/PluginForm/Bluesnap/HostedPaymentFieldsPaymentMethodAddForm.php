@@ -268,7 +268,10 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $store = $this->storeStorage->loadDefault();
     }
 
-    $store_config = $store->get('bluesnap_config')->value;
+    $store_config = NULL;
+    if ($store->hasField('bluesnap_config')) {
+      $store_config = $store->get('bluesnap_config')->value;
+    }
     if (!empty($store_config['kount']['merchant_id'])) {
       $merchant_id = $store_config['kount']['merchant_id'];
     }

@@ -15,9 +15,37 @@ use Symfony\Component\HttpFoundation\Request;
 interface HandlerInterface {
 
   /**
+   * Authorized IP addresses used by BlueSnap for the production environment.
+   */
+  const AUTHORIZED_IPS_PRODUCTION = [
+    '209.128.93.254',
+    '209.128.93.98',
+    '141.226.140.100',
+    '141.226.141.100',
+    '141.226.142.100',
+    '141.226.143.100',
+  ];
+
+  /**
+   * Authorized IP addresses used by BlueSnap for the sandbox environment.
+   */
+  const AUTHORIZED_IPS_SANDBOX = [
+    '209.128.93.232',
+    '141.226.140.200',
+    '141.226.141.200',
+    '141.226.142.200',
+    '141.226.143.200',
+  ];
+
+  /**
    * Indicates the IPN for a successful transaction.
    */
   const IPN_TYPE_CHARGE = 'CHARGE';
+
+  /**
+   * Indicates the IPN for a refund on a transaction.
+   */
+  const IPN_TYPE_REFUND = 'REFUND';
 
   /**
    * Indicates an IPN that is relevant to a transaction.
@@ -28,6 +56,21 @@ interface HandlerInterface {
    * Drupal payments.
    */
   const IPN_GROUP_TRANSACTION = 0;
+
+  /**
+   * Access control for the request.
+   *
+   * Validates whether this is a legitimate request made by BlueSnap.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request object.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException
+   *   If the IPN is unauthorized.
+   */
+  public function checkRequestAccess(Request $request, $env);
 
   /**
    * Parses the request and returns its data as an array.

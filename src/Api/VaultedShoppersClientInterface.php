@@ -78,14 +78,79 @@ interface VaultedShoppersClientInterface extends ClientInterface {
    * @param int $vaulted_shopper_id
    *   The vaulted shopper ID.
    * @param array $data
-   *   An array with the details of the card that needs to be deleted.
+   *   An array with the details of the Card payment source that will be
+   *   deleted. Keys required;
+   *   - cardType
+   *   - cardLastFourDigits
    *
    * @return mixed
    *   The response returned from BlueSnap, if it was a success.
    *
    * @throws \Exception
-   *   When deleting the card fails.
+   *   When deleting the payment source fails.
    */
   public function deleteCard($vaulted_shopper_id, array $data);
+
+  /**
+   * Deletes a ECP payment source from a vaulted shopper.
+   *
+   * @param int $vaulted_shopper_id
+   *   The vaulted shopper ID.
+   * @param array $data
+   *   An array with the details of the ECP payment source that will be
+   *   deleted. Keys required:
+   *   - accountType
+   *   - publicAccountNumber
+   *   - publicRoutingNumber
+   *
+   * @return mixed
+   *   The response returned from BlueSnap, if it was a success.
+   *
+   * @throws \Exception
+   *   When deleting the payment source fails.
+   */
+  public function deleteEcp($vaulted_shopper_id, array $data);
+
+  /**
+   * Deletes one or more payment sources from a vaulted shopper.
+   *
+   * @param int $vaulted_shopper_id
+   *   The vaulted shopper ID.
+   * @param array $data
+   *   An array with the details of the payment sources that will be deleted.
+   *   Example data structure:
+   *   [
+   *     'creditCardInfo' => [
+   *       'key' => 'creditCard',
+   *       'sources' => [
+   *         [
+   *           'cardType' => 'VISA',
+   *           'cardLastFourDigits' => '1234',
+   *         ],
+   *         [
+   *           'cardType' => 'VISA',
+   *           'cardLastFourDigits' => '5678',
+   *         ],
+   *       ],
+   *     ],
+   *     'ecpDetails' => [
+   *       'key' => 'ecp',
+   *       'sources' => [
+   *         [
+   *           'accountType' => 'CONSUMER_CHECKINGS',
+   *           'publicAccountNumber' => '12345',
+   *           'publicRoutingNumber' => '56789',
+   *         ],
+   *       ],
+   *     ],
+   *   ]
+   *
+   * @return mixed
+   *   The response returned from BlueSnap, if it was a success.
+   *
+   * @throws \Exception
+   *   When deleting the payment source fails.
+   */
+  public function deletePaymentSources($vaulted_shopper_id, array $data);
 
 }

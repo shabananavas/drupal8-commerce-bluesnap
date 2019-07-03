@@ -5,6 +5,7 @@ namespace Drupal\commerce_bluesnap\Ipn;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -41,6 +42,30 @@ class Handler implements HandlerInterface {
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function checkRequestAccess(Request $request, $env) {
+    $client_ip = $request->getClientIp();
+
+    $authorized_ips = [];
+    if ($env === 'production') {
+      $authorized_ips = self::AUTHORIZED_IPS_PRODUCTION;
+    }
+    else {
+      $authorized_ips = self::AUTHORIZED_IPS_SANDBOX;
+    }
+
+    if (!in_array($client_ip, $authorized_ips)) {
+      $message = sprintf(
+        'Unauthorized attempt for IPN request from IP "%s"',
+        $client_ip
+      );
+      $this->logger->error($message);
+      throw new AccessDeniedHttpException('Unauthorized request.');
+    }
   }
 
   /**
@@ -104,7 +129,10 @@ class Handler implements HandlerInterface {
    */
   protected function getGroupType(array $ipn_data) {
     $ipn_type = $this->getType($ipn_data);
-    $payment_ipn_types = [self::IPN_TYPE_CHARGE];
+    $payment_ipn_types = [
+      self::IPN_TYPE_CHARGE,
+      self::IPN_TYPE_REFUND,
+    ];
 
     if (in_array($ipn_type, $payment_ipn_types)) {
       return self::IPN_GROUP_TRANSACTION;

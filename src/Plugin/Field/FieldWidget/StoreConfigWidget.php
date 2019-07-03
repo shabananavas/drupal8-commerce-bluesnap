@@ -76,7 +76,7 @@ class StoreConfigWidget extends WidgetBase {
       '#description' => $this->t(
         "If you are using Kount Enterprise, please provide your Kount merchant ID."
       ),
-      '#default_value' => $settings['kount']['merchant_id'] ? $settings['kount']['merchant_id'] : FALSE,
+      '#default_value' => !empty($settings['kount']['merchant_id']) ? $settings['kount']['merchant_id'] : FALSE,
     ];
 
     return $element;

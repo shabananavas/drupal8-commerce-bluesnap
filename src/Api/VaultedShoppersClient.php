@@ -60,31 +60,81 @@ class VaultedShoppersClient implements VaultedShoppersClientInterface {
    * {@inheritdoc}
    */
   public function deleteCard($vaulted_shopper_id, array $data) {
+    $payment_sources = [
+      'creditCardInfo' => [
+        'key' => 'creditCard',
+        'sources' => [
+          [
+            'cardType' => $data['cardType'],
+            'cardLastFourDigits' => $data['cardLastFourDigits'],
+          ],
+        ],
+      ],
+    ];
+    return $this->deletePaymentSources($vaulted_shopper_id, $payment_sources);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deleteEcp($vaulted_shopper_id, array $data) {
+    $payment_sources = [
+      'ecpDetails' => [
+        'key' => 'ecp',
+        'sources' => [
+          [
+            'accountType' => $data['accountType'],
+            'publicAccountNumber' => $data['publicAccountNumber'],
+            'publicRoutingNumber' => $data['publicRoutingNumber'],
+          ],
+        ],
+      ],
+    ];
+    return $this->deletePaymentSources($vaulted_shopper_id, $payment_sources);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deletePaymentSources($vaulted_shopper_id, array $data) {
     // Fetch the vaulted shopper and remove the card from their payment sources.
     $vaulted_shopper = $this->get($vaulted_shopper_id);
 
-    // Go through all the cards of this user and if we find a matching one,
-    // set the status of the card to delete.
-    $payment_sources = $vaulted_shopper->paymentSources->creditCardInfo;
-    $card_found = FALSE;
-    foreach ($payment_sources as $key => $payment_source) {
-      $card = $payment_source->creditCard;
-      if (
-        $card->cardLastFourDigits === $data['cardLastFourDigits']
-        && $card->expirationMonth === $data['expirationMonth']
-        && $card->expirationYear === $data['expirationYear']
-      ) {
-        $card_found = TRUE;
-        $vaulted_shopper->paymentSources->creditCardInfo[$key]->status = 'D';
+    $remote_sources = $vaulted_shopper->paymentSources;
+    $sources_found = FALSE;
+
+    // Go through all payment sources available for the remote Vaulted Shopper
+    // and mark the given ones for deletion.
+    foreach ($data as $source_key => $source_group) {
+      if (!isset($remote_sources->{$source_key})) {
+        continue;
+      }
+
+      foreach ($remote_sources->{$source_key} as $remote_source) {
+        foreach ($source_group['sources'] as $source) {
+          foreach ($source as $property_key => $property_value) {
+            $remote_value = $remote_source->{$source_group['key']}->{$property_key};
+            if ($property_value !== $remote_value) {
+              continue 2;
+            }
+          }
+
+          if (isset($remote_source->status) && $remote_source->status === 'D') {
+            continue;
+          }
+
+          $remote_source->status = 'D';
+          $sources_found = TRUE;
+        }
       }
     }
 
-    // Just return if we don't have a matching card.
-    if (!$card_found) {
+    // Just return if we don't have any matching payment sources.
+    if (!$sources_found) {
       return;
     }
 
-    // Update the vaulted shopper on BlueSnap with the deleted card.
+    // Update the vaulted shopper on BlueSnap with the updated payment sources.
     $response = VaultedShopper::update($vaulted_shopper_id, $vaulted_shopper);
 
     if ($response->failed()) {

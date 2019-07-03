@@ -9,6 +9,7 @@ use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+use Drupal\commerce_price\Price;
 
 use Symfony\Component\HttpFoundation\Request;
 
@@ -52,7 +53,8 @@ class Ecp extends OnsiteBase {
       $result_id = $result->id;
     }
 
-    // Mark the payment as completed.
+    // Mark the payment as pending; it will be marked as completed when we
+    // receive the IPN signaling the payment was captured successfully.
     $payment->setState('pending');
     $payment->setRemoteId($result_id);
     $payment->save();
@@ -127,14 +129,22 @@ class Ecp extends OnsiteBase {
    * {@inheritdoc}
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
-    $owner = $payment_method->getOwner();
-    // If there's no owner we won't be able to delete the remote payment method
-    // as we won't have a remote profile. Just delete the payment method locally
-    // in that case.
-    if (!$owner) {
-      $payment_method->delete();
-      return;
-    }
+    // We always create a Vaulted Shopper ID even for anonymous users, and it's
+    // stored as the payment method's remote ID.
+    $vaulted_shopper_id = $payment_method->getRemoteId();
+
+    $data = [
+      'accountType' => $payment_method->account_type->value,
+      'publicAccountNumber' => $payment_method->account_number->value,
+      'publicRoutingNumber' => $payment_method->routing_number->value,
+    ];
+
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->deleteEcp($vaulted_shopper_id, $data);
+
     // Delete the local entity.
     $payment_method->delete();
   }
@@ -143,12 +153,15 @@ class Ecp extends OnsiteBase {
    * {@inheritdoc}
    */
   public function onNotify(Request $request) {
-    $this->ipnHandler->checkRequestAccess($request);
+    $this->ipnHandler->checkRequestAccess($request, $this->getEnvironment());
 
     // Get the IPN data and type.
     $ipn_data = $this->ipnHandler->parseRequestData(
       $request,
-      [IpnHandlerInterface::IPN_TYPE_CHARGE]
+      [
+        IpnHandlerInterface::IPN_TYPE_CHARGE,
+        IpnHandlerInterface::IPN_TYPE_REFUND,
+      ]
     );
     $ipn_type = $this->ipnHandler->getType($ipn_data);
 
@@ -156,6 +169,8 @@ class Ecp extends OnsiteBase {
     switch ($ipn_type) {
       case IpnHandlerInterface::IPN_TYPE_CHARGE:
         $this->ipnCharge($ipn_data);
+      case IpnHandlerInterface::IPN_TYPE_REFUND:
+        $this->ipnRefund($ipn_data);
     }
   }
 
@@ -221,39 +236,6 @@ class Ecp extends OnsiteBase {
     }
 
     return FALSE;
-  }
-
-  /**
-   * Prepares the transaction data required for blueSnap Ecp transaction API.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment.
-   * @param bool $capture
-   *   Whether the created payment should be captured (VS authorized only).
-   *   Allowed to be FALSE only if the plugin supports authorizations.
-   *
-   * @return array
-   *   The card transaction data array as required by BlueSnap.
-   */
-  protected function ecpTransactionData(PaymentInterface $payment, $capture) {
-    $payment_method = $payment->getPaymentMethod();
-
-    // Prepare the data required to process an ACH/ECP transaction.
-    $data = $this->prepareTransactionData($payment, $payment_method);
-
-    // We create Vaulted Shoppers for both authenticated and anonymous. For
-    // authenticated users we store the Vaulted Shopper ID as the user's remote
-    // ID, while for anonymous users we store it as the payment method's remote
-    // ID.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-    }
-    else {
-      $data['vaultedShopperId'] = $payment_method->getRemoteId();
-    }
-
-    return $data;
   }
 
   /**
@@ -324,7 +306,7 @@ class Ecp extends OnsiteBase {
    * Creates the payment method for a user without an existing Vaulted Shopper.
    *
    * Creates a new Vaulted Shopper with the ECP payment source in BlueSnap and
-   * it stores its ID in the .
+   * it stores its ID in the user's gateway remote ID.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
    *   The payment method.
@@ -352,43 +334,18 @@ class Ecp extends OnsiteBase {
   }
 
   /**
-   * Creates a Vaulted Shopper in BlueSnap based on the given payment method.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
-   *   The payment method.
-   * @param array $payment_details
-   *   The gateway-specific payment details.
-   *
-   * @return array
-   *   The details of the created Vaulted Shopper.
+   * {@inheritdoc}
    */
-  protected function createVaultedShopper(
+  protected function preparePaymentSourcesDataForVaultedShopper(
     PaymentMethodInterface $payment_method,
     array $payment_details
   ) {
-    // Prepare the data for the request.
-    $data = $this->prepareVaultedShopperBillingInfo($payment_method);
-
-    // ECP data.
     $ecp_data = $this->prepareEcpDetails(
       $payment_method,
       $payment_details
     );
-    $data['paymentSources']['ecpDetails'][] = $ecp_data;
 
-    // We pass the Drupal user ID as the merchant shopper ID, only for
-    // authenticated users.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['merchantShopperId'] = $payment_method->getOwner()->id();
-    }
-
-    // Create and return the vaulted shopper.
-    $client = $this->clientFactory->get(
-      VaultedShoppersClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    return $client->create($data);
+    return ['ecpDetails' => [$ecp_data]];
   }
 
   /**
@@ -410,7 +367,7 @@ class Ecp extends OnsiteBase {
     $amount = $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
-    return [
+    $data = [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       // Authorization is captured by the payment method form.
@@ -436,6 +393,14 @@ class Ecp extends OnsiteBase {
         'accountType' => $payment_method->account_type->value,
       ],
     ];
+
+    // We create Vaulted Shoppers for both authenticated and anonymous and,
+    // while for authenticated users we store the Vaulted Shopper ID as the user's remote
+    // ID, we store it as the payment method's remote ID as well in both cases;
+    // fetch it from there
+    $data['vaultedShopperId'] = $payment_method->getRemoteId();
+
+    return $data;
   }
 
   /**
@@ -496,6 +461,62 @@ class Ecp extends OnsiteBase {
     }
 
     $payment->set('state', 'completed');
+    $payment->save();
+  }
+
+  /**
+   * Acts when a REFUND IPN is received.
+   *
+   * Note: Exactly the same for both Hosted Payment Fields and ECP
+   * gateways. Consider reviewing the IPN system and move to the OnsiteBase
+   * class.
+   *
+   * @param array $ipn_data
+   *   The IPN request data.
+   */
+  protected function ipnRefund(array $ipn_data) {
+    $payment = $this->ipnHandler->getEntity($ipn_data);
+
+    // Get the refund amount.
+    $refund_amount = new Price(
+      $ipn_data['invoiceChargeAmount'],
+      $ipn_data['invoiceChargeCurrency']
+    );
+
+    // The refund amount should always be given at the currency of the
+    // transaction. If not, there's something wrong.
+    $payment_amount = $payment->getAmount();
+    if ($payment_amount->getCurrencyCode() !== $refund_amount->getCurrencyCode()) {
+      $message = sprintf(
+        'The currency for the refund received for payment with ID "%s" was "s", "%s" expected',
+        $payment->id(),
+        $refund_amount->getCurrencyCode(),
+        $payment_amount->getCurrencyCode()
+      );
+      throw new \InvalidArgumentException($message);
+    }
+
+    // Update the payment.
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($refund_amount);
+
+    // It's a full refund if BlueSnap tells us so or if we calculate so.
+    $is_full_refund = FALSE;
+    if (isset($ipn_data['fullRefund']) && $ipn_data['fullRefund'] === 'Y') {
+      $is_full_refund = TRUE;
+    }
+    elseif (!$new_refunded_amount->lessThan($payment_amount)) {
+      $is_full_refund = TRUE;
+    }
+
+    if ($is_full_refund) {
+      $payment->setState('refunded');
+    }
+    else {
+      $payment->setState('partially_refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
     $payment->save();
   }
 
