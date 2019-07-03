@@ -306,28 +306,20 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    * {@inheritdoc}
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
-    $owner = $payment_method->getOwner();
-    // If there's no owner we won't be able to delete the remote payment method
-    // as we won't have a remote profile. Just delete the payment method locally
-    // in that case.
-    if (!$owner) {
-      $payment_method->delete();
-      return;
-    }
+    // We always create a Vaulted Shopper ID even for anonymous users, and it's
+    // stored as the payment method's remote ID.
+    $vaulted_shopper_id = $payment_method->getRemoteId();
 
-    // Delete the card from the vaulted shopper on BlueSnap.
-    $customer_id = $this->getRemoteCustomerId($owner);
     $data = [
+      'cardType' => $this->reverseMapCreditCardType($payment_method->card_type->value),
       'cardLastFourDigits' => $payment_method->card_number->value,
-      'expirationMonth' => $payment_method->card_exp_month->value,
-      'expirationYear' => $payment_method->card_exp_year->value,
     ];
 
     $client = $this->clientFactory->get(
       VaultedShoppersClientInterface::API_ID,
       $this->getBluesnapConfig()
     );
-    $result = $client->deleteCard($customer_id, $data);
+    $result = $client->deleteCard($vaulted_shopper_id, $data);
 
     // Delete the local entity.
     $payment_method->delete();
@@ -371,7 +363,42 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    */
   protected function mapCreditCardType($card_type) {
     // https://developers.bluesnap.com/docs/credit-card-codes.
-    $map = [
+    $map = $this->creditCardTypeMap();
+    if (!isset($map[$card_type])) {
+      throw new HardDeclineException(sprintf('Unsupported credit card type "%s".', $card_type));
+    }
+
+    return $map[$card_type];
+  }
+
+  /**
+   * Maps the Commerce credit card type to a BlueSnap credit card type.
+   *
+   * @param string $card_type
+   *   The Commerce credit card type.
+   *
+   * @return string
+   *   The BlueSnap credit card type.
+   */
+  protected function reverseMapCreditCardType($card_type) {
+    // https://developers.bluesnap.com/docs/credit-card-codes.
+    $map = array_flip($this->creditCardTypeMap());
+    if (!isset($map[$card_type])) {
+      throw new HardDeclineException(sprintf('Unsupported credit card type "%s".', $card_type));
+    }
+
+    return $map[$card_type];
+  }
+
+  /**
+   * Returns the map of supported credit cards.
+   *
+   * @return array
+   *   A associative array of all supported credit card types, keyed by their
+   *   BlueSnap IDs with their Commerce IDs as their values.
+   */
+  protected function creditCardTypeMap() {
+    return [
       'AMEX' => 'amex',
       'DINERS' => 'dinersclub',
       'DISCOVER' => 'discover',
@@ -379,11 +406,6 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       'MASTERCARD' => 'mastercard',
       'VISA' => 'visa',
     ];
-    if (!isset($map[$card_type])) {
-      throw new HardDeclineException(sprintf('Unsupported credit card type "%s".', $card_type));
-    }
-
-    return $map[$card_type];
   }
 
   /**

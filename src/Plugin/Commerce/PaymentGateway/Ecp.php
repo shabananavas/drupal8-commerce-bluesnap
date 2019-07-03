@@ -133,14 +133,22 @@ class Ecp extends OnsiteBase {
    * {@inheritdoc}
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
-    $owner = $payment_method->getOwner();
-    // If there's no owner we won't be able to delete the remote payment method
-    // as we won't have a remote profile. Just delete the payment method locally
-    // in that case.
-    if (!$owner) {
-      $payment_method->delete();
-      return;
-    }
+    // We always create a Vaulted Shopper ID even for anonymous users, and it's
+    // stored as the payment method's remote ID.
+    $vaulted_shopper_id = $payment_method->getRemoteId();
+
+    $data = [
+      'accountType' => $payment_method->account_type->value,
+      'publicAccountNumber' => $payment_method->account_number->value,
+      'publicRoutingNumber' => $payment_method->routing_number->value,
+    ];
+
+    $client = $this->clientFactory->get(
+      VaultedShoppersClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $result = $client->deleteEcp($vaulted_shopper_id, $data);
+
     // Delete the local entity.
     $payment_method->delete();
   }
