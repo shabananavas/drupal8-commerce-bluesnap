@@ -149,6 +149,8 @@ class Ecp extends OnsiteBase {
    * {@inheritdoc}
    */
   public function onNotify(Request $request) {
+    $this->ipnHandler->checkRequestAccess($request, $this->getEnvironment());
+
     // Get the IPN data and type.
     $ipn_data = $this->ipnHandler->parseRequestData(
       $request,
