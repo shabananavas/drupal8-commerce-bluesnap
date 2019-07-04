@@ -35,32 +35,26 @@ class Ecp extends OnsiteBase {
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    // Prepare the data required to process an ACH/ECP transaction.
-    $data = $this->prepareTransactionData($payment, $payment_method);
+    // Check whether the order is a recurring order, if yes perform the
+    // recurring transaction.
+    $remote_id = $this->doCreatePaymentForSubscription($payment, $capture);
 
-    // We create Vaulted Shoppers for both authenticated and anonymous. For
-    // authenticated users we store the Vaulted Shopper ID as the user's remote
-    // ID, while for anonymous users we store it as the payment method's remote
-    // ID.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-    }
-    else {
-      $data['vaultedShopperId'] = $payment_method->getRemoteId();
-    }
+    if (!$remote_id) {
+      $data = $this->prepareTransactionData($payment, $capture);
 
-    // Create the payment transaction on BlueSnap.
-    $client = $this->clientFactory->get(
-      AltTransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $result = $client->create($data);
+      // Create the payment transaction on BlueSnap.
+      $client = $this->clientFactory->get(
+        AltTransactionsClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+      $result = $client->create($data);
+      $result_id = $result->id;
+    }
 
     // Mark the payment as pending; it will be marked as completed when we
     // receive the IPN signaling the payment was captured successfully.
     $payment->setState('pending');
-    $payment->setRemoteId($result->id);
+    $payment->setRemoteId($remote_id);
     $payment->save();
   }
 
@@ -307,7 +301,7 @@ class Ecp extends OnsiteBase {
     $amount = $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
-    return [
+    $data = [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       // Authorization is captured by the payment method form.
@@ -333,10 +327,49 @@ class Ecp extends OnsiteBase {
         'accountType' => $payment_method->account_type->value,
       ],
     ];
+
+    // We create Vaulted Shoppers for both authenticated and anonymous and,
+    // while for authenticated users we store the Vaulted Shopper ID as the
+    // user's remote ID, we store it as the payment method's remote ID as well
+    // in both cases; fetch it from there.
+    $data['vaultedShopperId'] = $payment_method->getRemoteId();
+
+    return $data;
+  }
+
+  /**
+   * Prepare the data for triggering an ACH/ECP transaction.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment for which the transaction is being prepared.
+   *
+   * @return array
+   *   An array containing the data required to process an ACH/ECP transaction.
+   */
+  protected function prepareSubscriptionData(PaymentInterface $payment) {
+    $payment_method = $payment->getPaymentMethod();
+
+    // Subscription data is the same with the transaction data; the only
+    // difference is the way the payment source details are passed.
+    $data = $this->prepareTransactionData($payment, $payment_method);
+
+    $data['paymentSource']['ecpInfo'] = [
+      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
+      'ecp' => [
+        'routingNumber' => $payment_method->routing_number->value,
+        'accountType' => $payment_method->account_type->value,
+        'accountNumber' => $payment_method->account_number->value,
+      ],
+    ];
+    unset($data['ecpTransactione']);
+
+    return $data;
   }
 
   /**
    * Prepares the ECP data for adding to a vaulted shopper.
+   *
+   * Contains the full, non-truncated payment method details.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
    *   The payment method.
@@ -351,7 +384,6 @@ class Ecp extends OnsiteBase {
     array $payment_details
   ) {
     return [
-      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'ecp' => [
         'routingNumber' => $payment_details['routing_number'],
         'accountType' => $payment_details['account_type'],
@@ -376,13 +408,23 @@ class Ecp extends OnsiteBase {
   /**
    * Acts when a CHARGE IPN is received.
    *
-   * Sets the status of the payment to completed.
+   * - Stores the remote subscription ID to the local entity.
+   * - Sets the status of the payment to completed.
    *
    * @param array $ipn_data
    *   The IPN request data.
    */
   protected function ipnCharge(array $ipn_data) {
     $payment = $this->ipnHandler->getEntity($ipn_data);
+    $order = $payment->getOrder();
+
+    $subscription_id = NULL;
+    if (!empty($ipn_data['subscriptionId'])) {
+      $subscription_id = $ipn_data['subscriptionId'];
+    }
+    if ($subscription_id && $this->orderIsSubscription($order)) {
+      $this->orderStoreSubscriptionRemoteId($order, $subscription_id);
+    }
 
     // We only mark the payment as completed if it is currently in pending
     // state. If it is refunded (fully or partially) or voided, there's

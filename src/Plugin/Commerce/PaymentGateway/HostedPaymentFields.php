@@ -5,8 +5,8 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
-use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
 use Drupal\commerce_bluesnap\EnhancedData\DataInterface;
+use Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
 use Drupal\commerce_payment\CreditCard;
@@ -20,7 +20,7 @@ use Drupal\commerce_price\RounderInterface;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -50,7 +50,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *
    * @var \Drupal\commerce_bluesnap\EnhancedData\DataInterface
    */
-  protected $enhanced_data;
+  protected $enhancedData;
 
   /**
    * The Bluesnap fraud session process.
@@ -76,6 +76,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The payment method type manager.
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   The module handler.
    * @param \Drupal\commerce_price\RounderInterface $rounder
    *   The rounder.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
@@ -83,7 +85,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
    *   The BlueSnap IPN handler.
    * @param \Drupal\commerce_bluesnap\EnhancedData\DataInterface $enhanced_data
-   *   The Bluesnap data level service.
+   *   The Bluesnap enhanced data service.
    * @param \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
    *   The Bluesnap fraud session process.
    */
@@ -95,6 +97,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     PaymentTypeManager $payment_type_manager,
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
+    ModuleHandlerInterface $module_handler,
     RounderInterface $rounder,
     ClientFactory $client_factory,
     IpnHandlerInterface $ipn_handler,
@@ -109,6 +112,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $payment_type_manager,
       $payment_method_type_manager,
       $time,
+      $module_handler,
       $rounder,
       $client_factory,
       $ipn_handler
@@ -134,6 +138,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
+      $container->get('module_handler'),
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.ipn_handler'),
@@ -150,32 +155,32 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    // Prepare the data required to process a Card transaction.
-    $data = $this->prepareTransactionData($payment, $payment_method, $capture);
+    $remote_id = NULL;
 
-    // We create Vaulted Shoppers for both authenticated and anonymous. For
-    // authenticated users we store the Vaulted Shopper ID as the user's remote
-    // ID, while for anonymous users we store it as the payment method's remote
-    // ID.
-    $owner = $payment_method->getOwner();
-    if ($owner->isAuthenticated()) {
-      $data['vaultedShopperId'] = $this->getRemoteCustomerId($owner);
-    }
-    else {
-      $data['vaultedShopperId'] = $payment_method->getRemoteId();
-    }
+    // Check whether the order is a recurring order, if yes perform the
+    // recurring transaction.
+    $remote_id = $this->doCreatePaymentForSubscription($payment, $capture);
 
-    // Create the payment transaction on BlueSnap.
-    $client = $this->clientFactory->get(
-      TransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $result = $client->create($data);
+    // If order is not a recurring order, continue with default credit card
+    // transaction.
+    if ($remote_id) {
+      $data = $this->prepareTransactionData(
+        $payment,
+        $payment_method,
+        $capture
+      );
+      $client = $this->clientFactory->get(
+        TransactionsClientInterface::API_ID,
+        $this->getBluesnapConfig()
+      );
+      $transaction = $client->create($data);
+      $remote_id = $transaction->id;
+    }
 
     // Mark the payment as completed.
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
-    $payment->setRemoteId($result->id);
+    $payment->setRemoteId($remote_Id);
     $payment->save();
 
     // Fraud session IDs are specific to a payment. Remove the current ID so
@@ -334,22 +339,20 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     // Get the IPN data and type.
     $ipn_data = $this->ipnHandler->parseRequestData(
       $request,
-      [IpnHandlerInterface::IPN_TYPE_REFUND]
+      [
+        IpnHandlerInterface::IPN_TYPE_CHARGE,
+        IpnHandlerInterface::IPN_TYPE_REFUND,
+      ]
     );
     $ipn_type = $this->ipnHandler->getType($ipn_data);
 
     // Delegate to the appropriate method based on type.
     switch ($ipn_type) {
+      case IpnHandlerInterface::IPN_TYPE_CHARGE:
+        $this->ipnCharge($ipn_data);
       case IpnHandlerInterface::IPN_TYPE_REFUND:
         $this->ipnRefund($ipn_data);
     }
-  }
-
-  /**
-   * Returns the password.
-   */
-  protected function getPassword() {
-    return $this->configuration['password'] ?: '';
   }
 
   /**
@@ -550,7 +553,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The payment method.
    * @param bool $capture
    *   Whether the created payment should be captured (VS authorized only).
-   *   @see OnsitePaymentGatewayInterface::createPayment()
+   *   See OnsitePaymentGatewayInterface::createPayment()
    *
    * @return array
    *   An array containing the data required to process a Card transaction.
@@ -598,6 +601,12 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     );
     $data = $data + $level_2_3_data;
 
+    // We create Vaulted Shoppers for both authenticated and anonymous users
+    // and, while for authenticated users we store the Vaulted Shopper ID as the
+    // user's remote ID, we store it as the payment method's remote ID as well
+    // in both cases; fetch it from there.
+    $data['vaultedShopperId'] = $payment_method->getRemoteId();
+
     return $data;
   }
 
@@ -620,6 +629,27 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'pfToken' => $payment_details['bluesnap_token'],
     ];
+  }
+
+  /**
+   * Acts when a CHARGE IPN is received.
+   *
+   * Stores the remote subscription ID to the local entity.
+   *
+   * @param array $ipn_data
+   *   The IPN request data.
+   */
+  protected function ipnCharge(array $ipn_data) {
+    $payment = $this->ipnHandler->getEntity($ipn_data);
+    $order = $payment->getOrder();
+
+    $subscription_id = NULL;
+    if (!empty($ipn_data['subscriptionId'])) {
+      $subscription_id = $ipn_data['subscriptionId'];
+    }
+    if ($subscription_id && $this->orderIsSubscription($order)) {
+      $this->orderStoreSubscriptionRemoteId($order, $subscription_id);
+    }
   }
 
   /**
@@ -676,6 +706,66 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     $payment->setRefundedAmount($new_refunded_amount);
     $payment->save();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function prepareSubscriptionData(PaymentInterface $payment) {
+    $payment_method = $payment->getPaymentMethod();
+
+    $amount = $payment->getAmount();
+    $amount = $this->rounder->round($amount);
+
+    // Create the payment data.
+    $data = [
+      'currency' => $amount->getCurrencyCode(),
+      'amount' => $amount->getNumber(),
+      'transactionFraudInfo' => [
+        'fraudSessionId' => $this->fraudSession->get(),
+      ],
+    ];
+
+    // Add bluesnap level2/3 data to transaction.
+    $level_2_3_data = $this->enhancedData->getData(
+      $payment->getOrder(),
+      $payment_method->card_type->value
+    );
+    $data = $data + $level_2_3_data;
+
+    // We create Vaulted Shoppers for both authenticated and anonymous users
+    // and, while for authenticated users we store the Vaulted Shopper ID as the
+    // user's remote ID, we store it as the payment method's remote ID as well
+    // in both cases; fetch it from there.
+    $data['vaultedShopperId'] = $payment_method->getRemoteId();
+
+    // It is marked as optional in the API documentation if a Vaulted Shopper is
+    // used, but we pass it so that it is clear which card should be charged in
+    // case the Vaulted Shopper has multiple cards.
+    $data['paymentSource']['creditCardInfo'] = [
+      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
+      'creditCard' => [
+        'cardLastFourDigits' => $payment_method->card_number->value,
+        'cardType' => $payment_method->card_type->value,
+      ],
+    ];
+
+    return $data;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function prepareSubscriptionChargeData(PaymentInterface $payment) {
+    $data = parent::prepareSubscriptionChargeData($payment);
+
+    // Add bluesnap level2/3 data to transaction.
+    $level_2_3_data = $this->enhancedData->getData(
+      $payment->getOrder(),
+      $payment->getPaymentMethod()->card_type->value
+    );
+
+    return $data + $level_2_3_data;
   }
 
 }

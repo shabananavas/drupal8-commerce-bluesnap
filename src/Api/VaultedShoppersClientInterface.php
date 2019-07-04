@@ -79,7 +79,7 @@ interface VaultedShoppersClientInterface extends ClientInterface {
    *   The vaulted shopper ID.
    * @param array $data
    *   An array with the details of the Card payment source that will be
-   *   deleted. Keys required;
+   *   deleted. Keys required:
    *   - cardType
    *   - cardLastFourDigits
    *

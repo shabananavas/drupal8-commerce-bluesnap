@@ -7,7 +7,11 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotifications
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 
 /**
- * Provides the interface for the BlueSnap ACH/ECP payment gateway.
+ * Interface for all BlueSnap onsite payment gateways.
+ *
+ * Currently:
+ * - Hosted payment fields.
+ * - ECP.
  */
 interface OnsiteInterface extends
   OnsitePaymentGatewayInterface,

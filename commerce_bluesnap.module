@@ -6,8 +6,10 @@
  */
 
 use Drupal\commerce_bluesnap\ConfigHelper;
+use Drupal\commerce_bluesnap\FieldService;
 use Drupal\commerce_store\Entity\StoreTypeInterface;
 
+use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Url;
@@ -42,6 +44,21 @@ function commerce_bluesnap_help($route_name, RouteMatchInterface $route_match) {
       $output .= '</ul>';
       return $output;
   }
+}
+
+/**
+ * Implements hook_entity_base_field_info().
+ */
+function commerce_bluesnap_entity_base_field_info(
+  EntityTypeInterface $entity_type
+) {
+  if ($entity_type->id() !== 'commerce_subscription') {
+    return;
+  }
+
+  $fields['remote_id'] = FieldService::subscriptionRemoteIdFieldDefinition();
+
+  return $fields;
 }
 
 /**
