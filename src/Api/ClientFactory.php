@@ -56,11 +56,8 @@ class ClientFactory {
       case AltTransactionsClientInterface::API_ID:
         return new AltTransactionsClient($this->logger);
 
-      case SubscriptionClientInterface::API_ID:
-        return new SubscriptionClient($this->logger);
-
-      case SubscriptionChargeClientInterface::API_ID:
-        return new SubscriptionChargeClient($this->logger);
+      case SubscriptionsClientInterface::API_ID:
+        return new SubscriptionsClient($this->logger);
 
       default:
         throw new \InvalidArgumentException(

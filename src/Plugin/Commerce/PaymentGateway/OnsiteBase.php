@@ -4,10 +4,11 @@ namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\ClientFactory;
 use Drupal\commerce_bluesnap\Api\TransactionsClientInterface;
+use Drupal\commerce_bluesnap\Api\SubscriptionsClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 
-use Drupal\commerce_order\Entity\Order;
+use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
@@ -24,7 +25,7 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Provides the bluesnap payment gateway base class.
+ * Base class providing common functionality to all BlueSnap onsite gateways.
  */
 abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInterface {
 
@@ -57,7 +58,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   protected $ipnHandler;
 
   /**
-   * Constructs a new HostedPaymentFields object.
+   * Constructs a new OnsiteBase object.
    *
    * @param array $configuration
    *   A configuration array containing information about the plugin instance.
@@ -188,6 +189,42 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function refundPayment(
+    PaymentInterface $payment,
+    Price $amount = NULL
+  ) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    // Round the amount as it can be manually entered via the Refund form.
+    $amount = $this->rounder->round($amount);
+    $this->assertRefundAmount($payment, $amount);
+
+    // Refund the payment transaction on BlueSnap.
+    $data = ['amount' => $amount->getNumber()];
+    $client = $this->clientFactory->get(
+      TransactionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+    $client->refund($payment->getRemoteId(), $data);
+
+    // Update the payment.
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->setState('partially_refunded');
+    }
+    else {
+      $payment->setState('refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
+  }
+
+  /**
    * Returns the BlueSnap configuration for this payment gateway.
    *
    * @return array
@@ -222,42 +259,6 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    */
   protected function getPassword() {
     return $this->configuration['password'] ?: '';
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function refundPayment(
-    PaymentInterface $payment,
-    Price $amount = NULL
-  ) {
-    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
-    // If not specified, refund the entire amount.
-    $amount = $amount ?: $payment->getAmount();
-    // Round the amount as it can be manually entered via the Refund form.
-    $amount = $this->rounder->round($amount);
-    $this->assertRefundAmount($payment, $amount);
-
-    // Refund the payment transaction on BlueSnap.
-    $data = ['amount' => $amount->getNumber()];
-    $client = $this->clientFactory->get(
-      TransactionsClientInterface::API_ID,
-      $this->getBluesnapConfig()
-    );
-    $client->refund($payment->getRemoteId(), $data);
-
-    // Update the payment.
-    $old_refunded_amount = $payment->getRefundedAmount();
-    $new_refunded_amount = $old_refunded_amount->add($amount);
-    if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->setState('partially_refunded');
-    }
-    else {
-      $payment->setState('refunded');
-    }
-
-    $payment->setRefundedAmount($new_refunded_amount);
-    $payment->save();
   }
 
   /**
@@ -377,87 +378,147 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   }
 
   /**
-   * Returns the subscription ID for an recurring order.
+   * Create a subscription charge on BlueSnap.
    *
-   * @param Drupal\commerce_order\Entity\Order $order
-   *   The order entity whose subscription Id needs to be fetched.
+   * Check whether the order is a subscription order (initial or recurring) and
+   * create a charge on BlueSnap.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return int
+   *   The BlueSnap transaction ID for the charge.
+   */
+  protected function doCreatePaymentForSubscription(PaymentInterface $payment) {
+    $order = $payment->getOrder();
+
+    $client = $this->clientFactory->get(
+      SubscriptionsClientInterface::API_ID,
+      $this->getBluesnapConfig()
+    );
+
+    // If recurring order, use merchant-managed subscription charge API.
+    if ($this->orderIsRecurringSubscription($order)) {
+      // Data required for a merchant managed subscription charge.
+      $data = $this->prepareSubscriptionChargeData($payment);
+      $data['subscription_id'] = $this->subscriptionIdForOrder($order);
+
+      $result = $client->createCharge($data);
+
+      return $result->transactionId;
+    }
+
+    // If initial recurring order, use merchant-managed subscription create API.
+    elseif ($this->orderIsInitialSubscription($order)) {
+      // Data required for a merchant-managed subscription.
+      $data = $this->prepareSubscriptionData($payment);
+
+      $result = $client->create($data);
+
+      // The Commerce Subscription entity where we want to store the remote
+      // subscription ID is not create yet at this point. We will store it when
+      // we receive the CHARGE IPN.
+      return $result->transactionId;
+    }
+  }
+
+  /**
+   * Returns the BlueSnap subscription ID for a recurring order.
+   *
+   * A BlueSnap subscription is created for the initial order. If the order
+   * contains multiple Commerce subscriptions and depending on their billing
+   * schedules the renewal orders might be combining subscriptions or not
+   * i.e. we may have only one or many separate renewal orders. The BlueSnap
+   * subscription for all Commerce subscriptions/renewal orders will still be
+   * the same. We therefore fetch it from the fetch subscription available.
+   *
+   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order entity whose subscription ID needs to be fetched.
    *
    * @return int|null
-   *   The subscription Id if it exists, else NULL.
+   *   The subscription ID if it exists, else NULL.
    */
-  protected function subscriptionId(Order $order) {
+  protected function subscriptionIdForOrder(OrderInterface $order) {
     $subscriptions = [];
+    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
 
-    // Loop through each order item to fetch the
-    // subscription entity.
+    // Loop through each order item to fetch the subscription entity.
     // The subscription ID is the remote ID of the initial subscription Order.
     foreach ($order->getItems() as $order_item) {
-      if ($order_item->get('subscription')->isEmpty()) {
-        // A recurring order item without a subscription ID is malformed.
+      if (!$order_item->hasField('subscription')) {
         continue;
       }
+
+      $subscription_field = $order_item->get('subscription');
+
+      // A recurring order item without a subscription ID is malformed.
+      if ($subscription_field->isEmpty()) {
+        continue;
+      }
+
       /** @var \Drupal\commerce_recurring\Entity\SubscriptionInterface $subscription */
-      $subscription = $order_item->get('subscription')->entity;
+      $subscription = $subscription_field->entity;
+
       // Guard against deleted subscription entities.
-      if ($subscription) {
-        $initial_order = $subscription->getInitialOrder();
-
-        // Fetch the payments assosiated with the initial order.
-        $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-        $payments = $payment_storage->loadMultipleByOrder($initial_order);
-
-        // Loop through payments and return the subscription ID.
-        // @to-do: Will there be more than one payment associated with
-        // single subscription order?
-        // Will there be more than one subscription ID
-        // associated with a single order?
-        foreach ($payments as $payment) {
-          return $payment->getRemoteId();
-        }
-      }
-    }
-
-    return NULL;
-  }
-
-  /**
-   * Checks whether an order is initial recurring order or not.
-   *
-   * @param Drupal\commerce_order\Entity\Order $order
-   *   The order entity to be checked for recurring or not.
-   *
-   * @return bool
-   *   TRUE if order is initial recurring, FALSE if not.
-   */
-  protected function isInitialRecurring(Order $order) {
-    // If commerce recurring module is not installed exit early.
-    if (!$this->moduleHandler->moduleExists('commerce_recurring')) {
-      return TRUE;
-    }
-
-    // We have to loop through
-    // each product to see if there exists
-    // a product with subscription enabled.
-    foreach ($order->getItems() as $order_item) {
-      $purchased_entity = $order_item->getPurchasedEntity();
-      if ($purchased_entity && !$purchased_entity->hasField('subscription_type')) {
+      if (!$subscription) {
         continue;
       }
 
-      // Can be considered as a subsscripton order if it has atleast one
-      // product which has subscription enabled.
-      $subscription_type_item = $purchased_entity->get('subscription_type');
-      $billing_schedule_item = $purchased_entity->get('billing_schedule');
-      if (!($subscription_type_item->isEmpty()) || !($billing_schedule_item->isEmpty())) {
-        return TRUE;
+      if (!$subscription->hasField('remote_id')) {
+        continue;
       }
-    }
 
-    return FALSE;
+      $remote_id_field = $subscription->get('remote_id');
+      if ($remote_id_field->isEmpty()) {
+        continue;
+      }
+
+      return $remote_id_field->value;
+    }
   }
 
   /**
-   * Prepares the transaction data required for blueSnap subscription API.
+   * Stores the BlueSnap subscription ID to all subscriptions for the order.
+   *
+   * Updates all subscriptions that reference the given order as their initial
+   * order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param string $remote_id
+   *   The remote BlueSnap ID for the subscription.
+   */
+  protected function orderStoreSubscriptionRemoteId(
+    OrderInterface $order,
+    $remote_id
+  ) {
+    // The local subscription ID is only created when creating the subscription
+    // for the first time. That transaction would always correspond to an order
+    // that is not of `recurring` type.
+    if ($order->bundle() === 'recurring') {
+      return;
+    }
+
+    // Load all subscriptions that reference the order as their initial order.
+    $subscription_storage = $this->entityTypeManager
+      ->getStorage('commerce_subscription');
+    $subscription_ids = $subscription_storage->getQuery()
+      ->condition('initial_order', $order->id())
+      ->execute();
+    if (!$subscription_ids) {
+      return;
+    }
+
+    $subscriptions = $subscription_storage->loadMultiple($subscription_ids);
+
+    foreach ($subscriptions as $subscription) {
+      $subscription->set('remote_id', $remote_id);
+      $subscription->save();
+    }
+  }
+
+  /**
+   * Prepares the transaction data required for BlueSnap subscription API.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
    *   The payment.
@@ -465,41 +526,88 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    * @return array
    *   The subscription transaction data array as required by BlueSnap.
    */
-  protected function merchantManagedSubscriptionChargeData(
-    PaymentInterface $payment
-  ) {
-    $order = $payment->getOrder();
-
-    $payment_method = $payment->getPaymentMethod();
-
+  protected function prepareSubscriptionChargeData(PaymentInterface $payment) {
     $amount = $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
-    // Create the payment data.
-    $transaction_data = [
+    // Create the subscription data.
+    return [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
-      'merchantTransactionId' => $this->subscriptionId($order),
     ];
+  }
 
-    return $transaction_data;
+  /**
+   * Checks whether an order is a subscription order (initial or recurring).
+   *
+   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order entity to be checked.
+   *
+   * @return bool
+   *   True if order is a subscription order, False if not.
+   */
+  protected function orderIsSubscription(OrderInterface $order) {
+    if ($this->orderIsRecurringSubscription($order)) {
+      return TRUE;
+    }
+
+    return $this->orderIsInitialSubscription($order);
   }
 
   /**
    * Checks whether an order is recurring or not.
    *
-   * @param Drupal\commerce_order\Entity\Order $order
+   * @param Drupal\commerce_order\Entity\OrderInterface $order
    *   The order entity to be checked for recurring or not.
    *
    * @return bool
    *   True if order is recurring, False if not.
    */
-  protected function isRecurring(Order $order) {
+  protected function orderIsRecurringSubscription(OrderInterface $order) {
     // If commerce recurring module exists and if the order type is recuring
     // we assume that it is a recurring order.
-    if ($this->moduleHandler->moduleExists('commerce_recurring')
-      && $order->bundle() == 'recurring') {
+    $module_exists = $this->moduleHandler->moduleExists('commerce_recurring');
+    if ($module_exists && $order->bundle() === 'recurring') {
       return TRUE;
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Checks whether an order is initial recurring order or not.
+   *
+   * @param Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order entity to be checked for recurring or not.
+   *
+   * @return bool
+   *   TRUE if order is initial recurring, FALSE if not.
+   */
+  protected function orderIsInitialSubscription(OrderInterface $order) {
+    // If commerce recurring module is not installed exit early.
+    if (!$this->moduleHandler->moduleExists('commerce_recurring')) {
+      return FALSE;
+    }
+
+    // Renewal orders are of type `recurring`; it's not the initial order in
+    // that case.
+    if ($order->bundle() === 'recurring') {
+      return FALSE;
+    }
+
+    // Can be considered an initial subscription order if it has at least one
+    // product which has subscription enabled.
+    foreach ($order->getItems() as $order_item) {
+      $purchased_entity = $order_item->getPurchasedEntity();
+      if (!$purchased_entity) {
+        continue;
+      }
+      if (!$purchased_entity->hasField('subscription_type')) {
+        continue;
+      }
+      if (!$purchased_entity->get('subscription_type')->isEmpty()) {
+        return TRUE;
+      }
     }
 
     return FALSE;

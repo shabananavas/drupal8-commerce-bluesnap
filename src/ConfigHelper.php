@@ -16,6 +16,8 @@ class ConfigHelper {
   /**
    * Returns the bundle field definition for creating a configuration field.
    *
+   * @todo Move to the FieldService.
+   *
    * @param string $label
    *   The label for the field.
    *
@@ -26,6 +28,7 @@ class ConfigHelper {
     return BundleFieldDefinition::create('bluesnap_config')
       ->setLabel(t($label))
       ->setCardinality(1)
+      ->setTranslatable(FALSE)
       ->setDisplayOptions('view', ['region' => 'hidden'])
       ->setDisplayOptions('form', ['region' => 'hidden'])
       ->setDisplayConfigurable('form', TRUE)

@@ -3,8 +3,6 @@
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_bluesnap\Api\AltTransactionsClientInterface;
-use Drupal\commerce_bluesnap\Api\SubscriptionClientInterface;
-use Drupal\commerce_bluesnap\Api\SubscriptionChargeClientInterface;
 use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -37,12 +35,12 @@ class Ecp extends OnsiteBase {
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
-    // Check whether the order is a recurring order, if yes
-    // perform the recurring transaction.
-    $result_id = $this->recurringTransaction($payment, $capture);
+    // Check whether the order is a recurring order, if yes perform the
+    // recurring transaction.
+    $remote_id = $this->doCreatePaymentForSubscription($payment, $capture);
 
-    if (empty($result_id)) {
-      $data = $this->ecpTransactionData($payment, $capture);
+    if (!$remote_id) {
+      $data = $this->prepareTransactionData($payment, $capture);
 
       // Create the payment transaction on BlueSnap.
       $client = $this->clientFactory->get(
@@ -56,7 +54,7 @@ class Ecp extends OnsiteBase {
     // Mark the payment as pending; it will be marked as completed when we
     // receive the IPN signaling the payment was captured successfully.
     $payment->setState('pending');
-    $payment->setRemoteId($result_id);
+    $payment->setRemoteId($remote_id);
     $payment->save();
   }
 
@@ -149,7 +147,7 @@ class Ecp extends OnsiteBase {
     $payment_method->delete();
   }
 
-  /*
+  /**
    * {@inheritdoc}
    */
   public function onNotify(Request $request) {
@@ -172,70 +170,6 @@ class Ecp extends OnsiteBase {
       case IpnHandlerInterface::IPN_TYPE_REFUND:
         $this->ipnRefund($ipn_data);
     }
-  }
-
-  /**
-   * Create a recurring payment transaction in bluesnap.
-   *
-   * Check whether the order is recurring or not and if yes
-   * make a recurring create/charge transaction in bluesnap.
-   *
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment.
-   * @param bool $capture
-   *   Whether the created payment should be captured (VS authorized only).
-   *   Allowed to be FALSE only if the plugin supports authorizations.
-   *
-   * @return int
-   *   The BlueSnap response ID.
-   */
-  protected function recurringTransaction(PaymentInterface $payment, $capture) {
-    $order = $payment->getOrder();
-
-    // If recurring order,
-    // use merchant managed subscription charge API.
-    if ($this->isRecurring($order)) {
-      $client = $this->clientFactory->get(
-        SubscriptionChargeClientInterface::API_ID,
-        $this->getBluesnapConfig()
-      );
-
-      // Data required for a merchant managed subscription charge.
-      $data = $this->merchantManagedSubscriptionChargeData($payment, $capture);
-      $data['subscription_id'] = $this->subscriptionId($order);
-
-      $result = $client->create($data);
-
-      return $result->subscriptionId;
-    }
-
-    // If initial recurring order,
-    // use merchant managed subscription create API.
-    elseif ($this->isInitialRecurring($order)) {
-      $client = $this->clientFactory->get(
-        SubscriptionClientInterface::API_ID,
-        $this->getBluesnapConfig()
-      );
-
-      // Data required for a merchant managed subscription.
-      $data = $this->ecpTransactionData($payment, $capture);
-      $result = $client->create($data);
-
-      // The subscription ID is not returned in the
-      // Create Subscription response.
-      // It is created once the payment has been processed
-      // (typically within 2–6 business days).
-      // You then be informed of the subscription ID via Charge webhook
-      // or via Retrieve Specific Charge request.
-      // @to-do Fetch subscription ID in IPN implementation.
-      if (!empty($result->subscriptionId)) {
-        return $result->subscriptionId;
-      }
-
-      return $result->transactionId;
-    }
-
-    return FALSE;
   }
 
   /**
@@ -395,16 +329,47 @@ class Ecp extends OnsiteBase {
     ];
 
     // We create Vaulted Shoppers for both authenticated and anonymous and,
-    // while for authenticated users we store the Vaulted Shopper ID as the user's remote
-    // ID, we store it as the payment method's remote ID as well in both cases;
-    // fetch it from there
+    // while for authenticated users we store the Vaulted Shopper ID as the
+    // user's remote ID, we store it as the payment method's remote ID as well
+    // in both cases; fetch it from there.
     $data['vaultedShopperId'] = $payment_method->getRemoteId();
 
     return $data;
   }
 
   /**
+   * Prepare the data for triggering an ACH/ECP transaction.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment for which the transaction is being prepared.
+   *
+   * @return array
+   *   An array containing the data required to process an ACH/ECP transaction.
+   */
+  protected function prepareSubscriptionData(PaymentInterface $payment) {
+    $payment_method = $payment->getPaymentMethod();
+
+    // Subscription data is the same with the transaction data; the only
+    // difference is the way the payment source details are passed.
+    $data = $this->prepareTransactionData($payment, $payment_method);
+
+    $data['paymentSource']['ecpInfo'] = [
+      'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
+      'ecp' => [
+        'routingNumber' => $payment_method->routing_number->value,
+        'accountType' => $payment_method->account_type->value,
+        'accountNumber' => $payment_method->account_number->value,
+      ],
+    ];
+    unset($data['ecpTransactione']);
+
+    return $data;
+  }
+
+  /**
    * Prepares the ECP data for adding to a vaulted shopper.
+   *
+   * Contains the full, non-truncated payment method details.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method
    *   The payment method.
@@ -443,13 +408,23 @@ class Ecp extends OnsiteBase {
   /**
    * Acts when a CHARGE IPN is received.
    *
-   * Sets the status of the payment to completed.
+   * - Stores the remote subscription ID to the local entity.
+   * - Sets the status of the payment to completed.
    *
    * @param array $ipn_data
    *   The IPN request data.
    */
   protected function ipnCharge(array $ipn_data) {
     $payment = $this->ipnHandler->getEntity($ipn_data);
+    $order = $payment->getOrder();
+
+    $subscription_id = NULL;
+    if (!empty($ipn_data['subscriptionId'])) {
+      $subscription_id = $ipn_data['subscriptionId'];
+    }
+    if ($subscription_id && $this->orderIsSubscription($order)) {
+      $this->orderStoreSubscriptionRemoteId($order, $subscription_id);
+    }
 
     // We only mark the payment as completed if it is currently in pending
     // state. If it is refunded (fully or partially) or voided, there's

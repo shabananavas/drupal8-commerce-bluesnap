@@ -7,7 +7,11 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotifications
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 
 /**
- * Interface for class OnsiteBase.
+ * Interface for all BlueSnap onsite payment gateways.
+ *
+ * Currently:
+ * - Hosted payment fields.
+ * - ECP.
  */
 interface OnsiteInterface extends
   OnsitePaymentGatewayInterface,

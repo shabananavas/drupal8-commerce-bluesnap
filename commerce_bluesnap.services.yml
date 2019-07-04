@@ -19,3 +19,8 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@logger.channel.commerce_bluesnap'
+
+  commerce_bluesnap.field_service:
+    class: Drupal\commerce_bluesnap\FieldService
+    arguments:
+      - '@entity.definition_update_manager'
