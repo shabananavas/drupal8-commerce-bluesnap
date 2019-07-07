@@ -2,7 +2,7 @@
 
 namespace Drupal\Tests\commerce_bluesnap\Unit;
 
-use Drupal\commerce_bluesnap\EnhancedDataLevel\Data;
+use Drupal\commerce_bluesnap\EnhancedData\Data;
 use Drupal\commerce_bluesnap\Tests\Mocks\MockAdjustment;
 
 use Drupal\address\Plugin\Field\FieldType\AddressItem;
@@ -198,6 +198,7 @@ class DataTest extends UnitTestCase {
     $order->hasField('shipments')->willReturn(TRUE);
     $order->getPlacedTime()->willReturn('1529255747');
     $order->getOrderNumber()->willReturn('W0133934');
+    $order->id()->willReturn('W0133934');
 
     // Adjustments.
     $adjustments['shipping'] = [
