@@ -172,7 +172,7 @@ class DataTest extends UnitTestCase {
           'grossNetIndicator' => 'N',
           'taxRate' => '0.06',
         ],
-      ]
+      ],
     ];
 
     // Actual output for master card.
