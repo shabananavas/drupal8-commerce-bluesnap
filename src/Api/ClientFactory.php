@@ -43,7 +43,6 @@ class ClientFactory {
    */
   public function get($api, array $config) {
     $this->init($config);
-
     switch ($api) {
       case HostedPaymentFieldsClientInterface::API_ID:
         return new HostedPaymentFieldsClient($this->logger);
@@ -56,6 +55,9 @@ class ClientFactory {
 
       case AltTransactionsClientInterface::API_ID:
         return new AltTransactionsClient($this->logger);
+
+      case SubscriptionsClientInterface::API_ID:
+        return new SubscriptionsClient($this->logger);
 
       default:
         throw new \InvalidArgumentException(

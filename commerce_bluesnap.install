@@ -25,6 +25,22 @@ function commerce_bluesnap_requirements($phase) {
         [':library_link' => 'https://github.com/shabananavas/php-bluesnap-sdk']
       ),
       'severity' => REQUIREMENT_ERROR,
-    ]
+    ],
   ];
+}
+
+/**
+ * Implements hook_install().
+ */
+function commerce_bluesnap_install() {
+  \Drupal::service('commerce_bluesnap.field_service')
+    ->installSubscriptionRemoteIdField();
+}
+
+/**
+ * Install the Remote ID base field for the Commerce Subscription entity.
+ */
+function commerce_bluesnap_update_8001() {
+  \Drupal::service('commerce_bluesnap.field_service')
+    ->installSubscriptionRemoteIdField();
 }
