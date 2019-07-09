@@ -7,6 +7,7 @@ use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\commerce_price\Price;
 
 use Symfony\Component\HttpFoundation\Request;
@@ -322,9 +323,9 @@ class Ecp extends OnsiteBase {
       ],
       // Note that the account/routing numbers must already be truncated.
       'ecpTransaction' => [
-        'publicAccountNumber' => $payment_method->account_number->value,
-        'publicRoutingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
+        'publicAccountNumber' => $payment_method->get('account_number')->getString(),
+        'publicRoutingNumber' => $payment_method->get('routing_number')->getString(),
+        'accountType' => $payment_method->get('account_type')->getString(),
       ],
     ];
 
