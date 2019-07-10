@@ -71,6 +71,21 @@ class EcpTest extends UnitTestCase {
     $ref_prepare_transaction_data->setAccessible(TRUE);
     $this->prepare_transaction_data = $ref_prepare_transaction_data;
 
+
+    // Use reflection to make prepareSubscriptionData() public.
+    $ref_prepare_subscription_data = new \ReflectionMethod(
+      $this->ecp, 'prepareSubscriptionData'
+    );
+    $ref_prepare_subscription_data->setAccessible(TRUE);
+    $this->ref_prepare_subscription_data = $ref_prepare_subscription_data;
+
+    // Use reflection to make preparePaymentSourcesDataForVaultedShopper() public.
+    $ref_prepare_payment_source_for_vaulted = new \ReflectionMethod(
+      $this->ecp, 'preparePaymentSourcesDataForVaultedShopper'
+    );
+    $ref_prepare_payment_source_for_vaulted->setAccessible(TRUE);
+    $this->ref_prepare_payment_source_for_vaulted = $ref_prepare_payment_source_for_vaulted;
+
     // Mock order object.
     $order_items[] = $this->mockOrderItems();
     $this->order = $this->mockOrder($order_items);
@@ -117,6 +132,100 @@ class EcpTest extends UnitTestCase {
     $actual_output = $this->prepare_transaction_data
       ->invokeArgs($this->ecp, [$payment, $payment_method]);
 
+    $this->assertEquals($expected_output, $actual_output);
+  }
+
+  /**
+   * Tests the preparePaymentSourcesDataForVaultedShopper method.
+   *
+   * ::covers preparePaymentSourcesDataForVaultedShopper.
+   */
+  public function testPreparePaymentSourcesDataForVaultedShopper() {
+    // Expected output for preparePaymentSourcesDataForVaultedShopper().
+    $expected_output = [
+      'ecpDetails' => [
+        '0' => [
+          'ecp' => [
+            'routingNumber' => '4099999992',
+            'accountType' => '011075150',
+            'accountNumber' => 'CONSUMER_CHECKING',
+          ],
+        ],
+      ],
+    ];
+
+    $payment_method = $this->mockPaymentMethod();
+    $payment_details = [
+      'routing_number' => '4099999992',
+      'account_type' => '011075150',
+      'account_number' => 'CONSUMER_CHECKING',
+    ];
+
+    // Actual output.
+    $actual_output = $this->ref_prepare_payment_source_for_vaulted
+      ->invokeArgs($this->ecp, [$payment_method, $payment_details]);
+    $this->assertEquals($expected_output, $actual_output);
+  }
+
+  /**
+   * Tests the prepareSubscriptionData method.
+   *
+   * ::covers prepareSubscriptionData.
+   */
+  public function testPrepareSubscriptionData() {
+    // Expected output for prepareSubscriptionData().
+    $expected_output = [
+      'currency' => 'USD',
+      'amount' => '20',
+      // Authorization is captured by the payment method form.
+      'authorizedByShopper' => 1,
+      'transactionMetadata' => [
+        'metaData' => [
+          [
+            'metaKey' => 'order_id',
+            'metaValue' => 'W0133934',
+            'metaDescription' => 'The transaction\'s order ID.',
+          ],
+          [
+            'metaKey' => 'store_id',
+            'metaValue' => '1',
+            'metaDescription' => 'The transaction\'s store ID.',
+          ],
+        ],
+      ],
+      // Note that the account/routing numbers must already be truncated.
+      'ecpTransaction' => [
+        'publicAccountNumber' => '4099999992',
+        'publicRoutingNumber' => '011075150',
+        'accountType' => 'CONSUMER_CHECKING',
+      ],
+      'vaultedShopperId' => '19563598',
+      'paymentSource' => [
+        'ecpInfo' => [
+          'billingContactInfo' => [
+            'firstName' => 'Seller',
+            'lastName' => 'Central',
+            'address1' => '8 Fort Path Road',
+            'address2' => '',
+            'city' => 'Madison',
+            'state' => 'CT',
+            'zip' => '33634-6308',
+            'country' => 'US',
+          ],
+          'ecp' => [
+            'routingNumber' => '011075150',
+            'accountType' => 'CONSUMER_CHECKING',
+            'accountNumber' => '4099999992',
+          ],
+        ]
+      ]
+    ];
+    $payment_method = $this->mockPaymentMethod();
+    $payment = $this->mockPayment();
+
+    // Actual output.
+    $actual_output = $this->ref_prepare_subscription_data
+      ->invokeArgs($this->ecp, [$payment]);
     $this->assertEquals($expected_output, $actual_output);
   }
 
@@ -225,8 +334,14 @@ class EcpTest extends UnitTestCase {
     $profile_details = $this->prophesize(FieldItemList::class);
     $address_item = $this->prophesize(AddressItem::class);
 
+    $address_item->getGivenName()->willReturn('Seller');
+    $address_item->getFamilyName()->willReturn('Central');
+    $address_item->getAddressLine1()->willReturn('8 Fort Path Road');
+    $address_item->getAddressLine2()->willReturn('');
+    $address_item->getLocality()->willReturn('Madison');
+    $address_item->getAdministrativeArea()->willReturn('CT');
+    $address_item->getCountryCode()->willReturn('US');
     $address_item->getPostalCode()->willReturn('33634-6308');
-    $address_item->getCountryCode()->willReturn('us');
 
     $profile_details->isEmpty()->willReturn(FALSE);
     $profile_details->first()->willReturn($address_item->reveal());
@@ -254,6 +369,21 @@ class EcpTest extends UnitTestCase {
 
     $payment_method->getRemoteId()->willReturn('19563598');
 
+    $billing_profile = $this->prophesize(Profile::class);
+    $billing_profile->get('address')->willReturn($this->mockProfileDetails([
+      'given_name' => 'Seller',
+      'additional_name' => '',
+      'family_name' => 'Central',
+      'organization' => 'Amazon.com',
+      'address_line1' => '98 Fort Path Road',
+      'address_line2' => '',
+      'locality' => 'Madison',
+      'administrative_area' => 'CT',
+      'postal_code' => '06443',
+      'country' => 'US',
+    ]));
+    $payment_method->getBillingProfile()->willReturn($billing_profile->reveal());
+
     return $payment_method->reveal();
   }
 
@@ -262,10 +392,12 @@ class EcpTest extends UnitTestCase {
    */
   protected function mockPayment() {
     $payment = $this->prophesize(Payment::class);
+    $payment_method = $this->mockPaymentMethod();
 
     $payment->getAmount()->willReturn(new Price('19.99', 'USD'));
     $payment->getOrderId()->willReturn('W0133934');
     $payment->getOrder()->willReturn($this->order);
+    $payment->getPaymentMethod()->willReturn($payment_method);
 
     return $payment->reveal();
   }

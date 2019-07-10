@@ -357,9 +357,9 @@ class Ecp extends OnsiteBase {
     $data['paymentSource']['ecpInfo'] = [
       'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'ecp' => [
-        'routingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
-        'accountNumber' => $payment_method->account_number->value,
+        'routingNumber' => $payment_method->get('routing_number')->getString(),
+        'accountType' => $payment_method->get('account_type')->getString(),
+        'accountNumber' => $payment_method->get('account_number')->getString(),
       ],
     ];
     unset($data['ecpTransactione']);
