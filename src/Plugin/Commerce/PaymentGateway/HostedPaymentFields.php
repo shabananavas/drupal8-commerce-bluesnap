@@ -26,11 +26,11 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Provides the Bluesnap Hosted Payment Fields payment gateway.
+ * Provides the BlueSnap Hosted Payment Fields payment gateway.
  *
  * @CommercePaymentGateway(
  *   id = "bluesnap_hosted_payment_fields",
- *   label = "BlueSnap (Hosted Payment Fields)",
+ *   label = "BlueSnap Card Processing",
  *   display_label = "BlueSnap",
  *   forms = {
  *     "add-payment-method" =

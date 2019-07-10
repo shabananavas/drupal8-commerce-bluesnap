@@ -12,7 +12,7 @@ use Drupal\commerce_price\Price;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Provides the Bluesnap ACH/ECP payment gateway.
+ * Provides the BlueSnap ACH/ECP payment gateway.
  *
  * @CommercePaymentGateway(
  *   id = "bluesnap_ecp",
