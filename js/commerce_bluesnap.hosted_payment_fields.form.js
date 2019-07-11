@@ -207,9 +207,15 @@
 
         /**
          * Takes token and bsObj as inputs and initiates Hosted Payment Fields.
+         *
+         * Do this only when the Bluesnap SDK has loaded.
          */
-        // Mount the payment fields from BlueSnap.
-        bluesnap.hostedPaymentFieldsCreation($hostedPaymentFieldsToken, bluesnapObject);
+        var waitForSdk = setInterval(function () {
+          if (typeof bluesnap !== 'undefined') {
+            clearInterval(waitForSdk);
+            bluesnap.hostedPaymentFieldsCreation($hostedPaymentFieldsToken, bluesnapObject);
+          }
+        }, 100);
 
         /**
          * Form submit.
