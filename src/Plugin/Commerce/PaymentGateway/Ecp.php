@@ -7,6 +7,7 @@ use Drupal\commerce_bluesnap\Api\VaultedShoppersClientInterface;
 use Drupal\commerce_bluesnap\Ipn\HandlerInterface as IpnHandlerInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\commerce_price\Price;
 
 use Symfony\Component\HttpFoundation\Request;
@@ -112,13 +113,19 @@ class Ecp extends OnsiteBase {
     }
 
     // Save the payment method.
-    $payment_method->routing_number = $this->truncateEcpNumber(
-      $payment_details['routing_number']
+    $payment_method->set(
+      'routing_number',
+      $this->truncateEcpNumber($payment_details['routing_number'])
     );
-    $payment_method->account_number = $this->truncateEcpNumber(
-      $payment_details['account_number']
+    $payment_method->set(
+      'account_number',
+      $this->truncateEcpNumber($payment_details['account_number'])
     );
-    $payment_method->account_type = $payment_details['account_type'];
+    $payment_method->set(
+      'account_type',
+      $payment_details['account_type']
+    );
+
     $payment_method->setRemoteId($remote_id);
     $payment_method->save();
   }
@@ -322,9 +329,9 @@ class Ecp extends OnsiteBase {
       ],
       // Note that the account/routing numbers must already be truncated.
       'ecpTransaction' => [
-        'publicAccountNumber' => $payment_method->account_number->value,
-        'publicRoutingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
+        'publicAccountNumber' => $payment_method->get('account_number')->getString(),
+        'publicRoutingNumber' => $payment_method->get('routing_number')->getString(),
+        'accountType' => $payment_method->get('account_type')->getString(),
       ],
     ];
 
@@ -356,9 +363,9 @@ class Ecp extends OnsiteBase {
     $data['paymentSource']['ecpInfo'] = [
       'billingContactInfo' => $this->prepareBillingContactInfo($payment_method),
       'ecp' => [
-        'routingNumber' => $payment_method->routing_number->value,
-        'accountType' => $payment_method->account_type->value,
-        'accountNumber' => $payment_method->account_number->value,
+        'routingNumber' => $payment_method->get('routing_number')->getString(),
+        'accountType' => $payment_method->get('account_type')->getString(),
+        'accountNumber' => $payment_method->get('account_number')->getString(),
       ],
     ];
     unset($data['ecpTransactione']);
