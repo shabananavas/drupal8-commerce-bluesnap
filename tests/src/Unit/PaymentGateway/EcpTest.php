@@ -2,9 +2,11 @@
 
 namespace Drupal\Tests\commerce_bluesnap\Unit;
 
+use Drupal\commerce_bluesnap\Api\ClientFactory;
+use Drupal\commerce_bluesnap\Api\AltTransactionsClient;
+use Drupal\commerce_bluesnap\Api\VaultedShoppersClient;
 use Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ecp;
 use Drupal\commerce_bluesnap\Ipn\Handler;
-use Drupal\commerce_bluesnap\Api\ClientFactory;
 
 use Drupal\address\Plugin\Field\FieldType\AddressItem;
 use Drupal\commerce_order\Entity\Order;
@@ -36,6 +38,8 @@ use Drupal\physical\Plugin\Field\FieldType\MeasurementItem;
 use Drupal\physical\Weight;
 use Drupal\profile\Entity\Profile;
 use Drupal\Tests\UnitTestCase;
+use Drupal\state_machine\Plugin\Field\FieldType\StateItem;
+use Drupal\user\Entity\User;
 
 /**
  * @coversDefaultClass \Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\Ecp
@@ -96,35 +100,59 @@ class EcpTest extends UnitTestCase {
    *
    * ::covers prepareTransactionData.
    */
+  public function testCreatePayment() {
+    $payment = $this->mockPayment();
+    $this->ecp->createPayment($payment);
+    $expected_remote_id = '2345';
+
+    $this->assertEquals($expected_remote_id, $payment->getRemoteId());
+  }
+
+  /**
+   * Tests the createPaymentMethod.
+   *
+   * Ensures that a exception is thrown if required keys are not present in
+   * $payment_details array.
+   *
+   * ::covers createPaymentMethod.
+   *
+   * @expectedException \InvalidArgumentException
+   */
+  public function testCreatePaymentMethodException() {
+    $payment_method = $this->mockPaymentMethod();
+    $payment_details = [
+      'routing_number' => '011075150',
+    ];
+
+    $this->ecp->createPaymentMethod($payment_method, $payment_details);
+  }
+
+  /**
+   * Tests the createPaymentMethod.
+   *
+   * Ensures that a exception is thrown if required keys are not present in
+   * $payment_details array.
+   *
+   * ::covers createPaymentMethod.
+   */
+  public function testCreatePaymentMethod() {
+    $payment_method = $this->mockPaymentMethod();
+    $payment_details = $this->getPaymentDetails();
+
+    $this->ecp->createPaymentMethod($payment_method, $payment_details);
+    $expected_remote_id = '675456';
+
+    $this->assertEquals($expected_remote_id, $payment_method->getRemoteId());
+  }
+
+  /**
+   * Tests the prepareTransactionData method.
+   *
+   * ::covers prepareTransactionData.
+   */
   public function testPrepareTransactionData() {
     // Expected output for prepareTransactionData().
-    $expected_output = [
-      'currency' => 'USD',
-      'amount' => '20',
-      // Authorization is captured by the payment method form.
-      'authorizedByShopper' => 1,
-      'transactionMetadata' => [
-        'metaData' => [
-          [
-            'metaKey' => 'order_id',
-            'metaValue' => 'W0133934',
-            'metaDescription' => 'The transaction\'s order ID.',
-          ],
-          [
-            'metaKey' => 'store_id',
-            'metaValue' => '1',
-            'metaDescription' => 'The transaction\'s store ID.',
-          ],
-        ],
-      ],
-      // Note that the account/routing numbers must already be truncated.
-      'ecpTransaction' => [
-        'publicAccountNumber' => '4099999992',
-        'publicRoutingNumber' => '011075150',
-        'accountType' => 'CONSUMER_CHECKING',
-      ],
-      'vaultedShopperId' => '19563598',
-    ];
+    $expected_output = $this->getAltTransactionData();
     $payment_method = $this->mockPaymentMethod();
     $payment = $this->mockPayment();
 
@@ -146,20 +174,16 @@ class EcpTest extends UnitTestCase {
       'ecpDetails' => [
         '0' => [
           'ecp' => [
-            'routingNumber' => '4099999992',
-            'accountType' => '011075150',
-            'accountNumber' => 'CONSUMER_CHECKING',
+            'routingNumber' => '011075150',
+            'accountType' => 'CONSUMER_CHECKING',
+            'accountNumber' => '4099999992',
           ],
         ],
       ],
     ];
 
     $payment_method = $this->mockPaymentMethod();
-    $payment_details = [
-      'routing_number' => '4099999992',
-      'account_type' => '011075150',
-      'account_number' => 'CONSUMER_CHECKING',
-    ];
+    $payment_details = $this->getPaymentDetails();
 
     // Actual output.
     $actual_output = $this->ref_prepare_payment_source_for_vaulted
@@ -174,52 +198,7 @@ class EcpTest extends UnitTestCase {
    */
   public function testPrepareSubscriptionData() {
     // Expected output for prepareSubscriptionData().
-    $expected_output = [
-      'currency' => 'USD',
-      'amount' => '20',
-      // Authorization is captured by the payment method form.
-      'authorizedByShopper' => 1,
-      'transactionMetadata' => [
-        'metaData' => [
-          [
-            'metaKey' => 'order_id',
-            'metaValue' => 'W0133934',
-            'metaDescription' => 'The transaction\'s order ID.',
-          ],
-          [
-            'metaKey' => 'store_id',
-            'metaValue' => '1',
-            'metaDescription' => 'The transaction\'s store ID.',
-          ],
-        ],
-      ],
-      // Note that the account/routing numbers must already be truncated.
-      'ecpTransaction' => [
-        'publicAccountNumber' => '4099999992',
-        'publicRoutingNumber' => '011075150',
-        'accountType' => 'CONSUMER_CHECKING',
-      ],
-      'vaultedShopperId' => '19563598',
-      'paymentSource' => [
-        'ecpInfo' => [
-          'billingContactInfo' => [
-            'firstName' => 'Seller',
-            'lastName' => 'Central',
-            'address1' => '8 Fort Path Road',
-            'address2' => '',
-            'city' => 'Madison',
-            'state' => 'CT',
-            'zip' => '33634-6308',
-            'country' => 'US',
-          ],
-          'ecp' => [
-            'routingNumber' => '011075150',
-            'accountType' => 'CONSUMER_CHECKING',
-            'accountNumber' => '4099999992',
-          ],
-        ]
-      ]
-    ];
+    $expected_output = $this->getSubscriptionTransactionData();
     $payment_method = $this->mockPaymentMethod();
     $payment = $this->mockPayment();
 
@@ -367,7 +346,11 @@ class EcpTest extends UnitTestCase {
     $account_type->getString()->willReturn('CONSUMER_CHECKING');
     $payment_method->get('account_type')->willReturn($account_type->reveal());
 
-    $payment_method->getRemoteId()->willReturn('19563598');
+    $payment_method->getRemoteId()->willReturn('675456');
+
+    $payment_method->isExpired()->willReturn(FALSE);
+
+    $payment_method->getOwner()->willReturn($this->mockUser());
 
     $billing_profile = $this->prophesize(Profile::class);
     $billing_profile->get('address')->willReturn($this->mockProfileDetails([
@@ -384,6 +367,13 @@ class EcpTest extends UnitTestCase {
     ]));
     $payment_method->getBillingProfile()->willReturn($billing_profile->reveal());
 
+    $payment_method->set('routing_number', '75150')->willReturn($account_number->reveal());
+    $payment_method->set('account_number', '99992')->willReturn($account_number->reveal());
+    $payment_method->set('account_type', 'CONSUMER_CHECKING')->willReturn($account_number->reveal());
+
+    $payment_method->setRemoteId('675456')->willReturn($payment_method->reveal());
+    $payment_method->save()->willReturn($payment_method->reveal());
+
     return $payment_method->reveal();
   }
 
@@ -397,7 +387,13 @@ class EcpTest extends UnitTestCase {
     $payment->getAmount()->willReturn(new Price('19.99', 'USD'));
     $payment->getOrderId()->willReturn('W0133934');
     $payment->getOrder()->willReturn($this->order);
+    $payment->getState()->willReturn($this->mockState());
+
     $payment->getPaymentMethod()->willReturn($payment_method);
+    $payment->setState("pending")->willReturn($payment->reveal());
+    $payment->setRemoteId('2345')->willReturn($payment->reveal());
+    $payment->getRemoteId()->willReturn('2345');
+    $payment->save()->willReturn($payment->reveal());
 
     return $payment->reveal();
   }
@@ -450,10 +446,70 @@ class EcpTest extends UnitTestCase {
   }
 
   /**
+   * Mocks state machine.
+   */
+  protected function mockState() {
+    $state_item = $this->prophesize(StateItem::class);
+    $state_item->getId()->willReturn('new');
+
+    return $state_item->reveal();
+  }
+
+  /**
    * Mocks client factory.
    */
   protected function mockClientFactory() {
-    return $this->prophesize(clientFactory::class)->reveal();
+    $client_factory = $this->prophesize(clientFactory::class);
+    $config = [
+      "env" => "sandbox",
+      "username" => "",
+      "password" => ""
+    ];
+    $client_factory->get('recurring/ondemand', $config)
+      ->willReturn($this->mockAltTransactionsClient());
+
+    $client_factory->get('alt-transactions', $config)
+      ->willReturn($this->mockAltTransactionsClient());
+
+    $client_factory->get('vaulted-shoppers', $config)
+      ->willReturn($this->mockVaultedShoppersClient());
+
+    return $client_factory->reveal();
+  }
+
+  /**
+   * Mocks ALT transactions client.
+   */
+  protected function mockAltTransactionsClient() {
+    $alt_client = $this->prophesize(AltTransactionsClient::class);
+
+    $result = (object)['id' => '2345'];
+    $alt_client->create($this->getAltTransactionData())->willReturn($result);
+
+    return $alt_client->reveal();
+  }
+
+  /**
+   * Mocks ALT transactions client.
+   */
+  protected function mockVaultedShoppersClient() {
+    $vaulted_shopper_client = $this->prophesize(VaultedShoppersClient::class);
+
+    $result = (object)['id' => '675456'];
+    $vaulted_shopper_client->create($this->getVaultedShopperTransactionData())
+      ->willReturn($result);
+
+    return $vaulted_shopper_client->reveal();
+  }
+
+  /**
+   * Mocks user.
+   */
+  protected function mockUser() {
+    $user = $this->prophesize(user::class);
+    $user->isAuthenticated()->willReturn(FALSE);
+
+    return $user->reveal();
   }
 
   /**
@@ -518,4 +574,123 @@ class EcpTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * Returns sample alt transaction data.
+   */
+  protected function getAltTransactionData() {
+    return  [
+      "currency" => "USD",
+      "amount" => "20",
+      "authorizedByShopper" => true,
+      "transactionMetadata" => [
+        "metaData" => [
+          [
+            "metaKey" => "order_id",
+            "metaValue" => "W0133934",
+            "metaDescription" => "The transaction's order ID."
+          ],
+          [
+            "metaKey" => "store_id",
+            "metaValue" => "1",
+            "metaDescription" => "The transaction's store ID."]
+          ]
+        ],
+      "ecpTransaction" => [
+        "publicAccountNumber" => "4099999992",
+        "publicRoutingNumber" => "011075150",
+        "accountType" => "CONSUMER_CHECKING"
+      ],
+      "vaultedShopperId" => "675456"
+    ];
+  }
+
+  /**
+   * Returns sample vaulted shopper transaction data.
+   */
+  protected function getVaultedShopperTransactionData() {
+    return  [
+      "firstName" => "Seller",
+      "lastName" => "Central",
+      "address2" => "",
+      "city" => "Madison",
+      "state" => "CT",
+      "zip" => "33634-6308",
+      "country" => "US",
+      "address" => "8 Fort Path Road",
+      "paymentSources" => [
+        "ecpDetails" => [
+          [
+            "ecp" => [
+              "routingNumber" => "011075150",
+              "accountType" => "CONSUMER_CHECKING",
+              "accountNumber" => "4099999992"
+            ]
+          ]
+        ]
+      ]
+    ];
+  }
+
+  /**
+   * Returns sample payment details data.
+   */
+  protected function getPaymentDetails() {
+    return [
+      'routing_number' => '011075150',
+      'account_type' => 'CONSUMER_CHECKING',
+      'account_number' => '4099999992',
+    ];
+  }
+
+  /**
+   * Returns sample subscription transaction data.
+   */
+  protected function getSubscriptionTransactionData() {
+    return [
+      'currency' => 'USD',
+      'amount' => '20',
+      // Authorization is captured by the payment method form.
+      'authorizedByShopper' => 1,
+      'transactionMetadata' => [
+        'metaData' => [
+          [
+            'metaKey' => 'order_id',
+            'metaValue' => 'W0133934',
+            'metaDescription' => 'The transaction\'s order ID.',
+          ],
+          [
+            'metaKey' => 'store_id',
+            'metaValue' => '1',
+            'metaDescription' => 'The transaction\'s store ID.',
+          ],
+        ],
+      ],
+      // Note that the account/routing numbers must already be truncated.
+      'ecpTransaction' => [
+        'publicAccountNumber' => '4099999992',
+        'publicRoutingNumber' => '011075150',
+        'accountType' => 'CONSUMER_CHECKING',
+      ],
+      'vaultedShopperId' => '675456',
+      'paymentSource' => [
+        'ecpInfo' => [
+          'billingContactInfo' => [
+            'firstName' => 'Seller',
+            'lastName' => 'Central',
+            'address1' => '8 Fort Path Road',
+            'address2' => '',
+            'city' => 'Madison',
+            'state' => 'CT',
+            'zip' => '33634-6308',
+            'country' => 'US',
+          ],
+          'ecp' => [
+            'routingNumber' => '011075150',
+            'accountType' => 'CONSUMER_CHECKING',
+            'accountNumber' => '4099999992',
+          ],
+        ]
+      ]
+    ];
+  }
 }

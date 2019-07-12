@@ -113,13 +113,19 @@ class Ecp extends OnsiteBase {
     }
 
     // Save the payment method.
-    $payment_method->routing_number = $this->truncateEcpNumber(
-      $payment_details['routing_number']
+    $payment_method->set(
+      'routing_number',
+      $this->truncateEcpNumber($payment_details['routing_number'])
     );
-    $payment_method->account_number = $this->truncateEcpNumber(
-      $payment_details['account_number']
+    $payment_method->set(
+      'account_number',
+      $this->truncateEcpNumber($payment_details['account_number'])
     );
-    $payment_method->account_type = $payment_details['account_type'];
+    $payment_method->set(
+      'account_type',
+      $payment_details['account_type']
+    );
+
     $payment_method->setRemoteId($remote_id);
     $payment_method->save();
   }
