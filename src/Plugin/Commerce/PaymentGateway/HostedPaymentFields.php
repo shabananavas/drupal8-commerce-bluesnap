@@ -151,6 +151,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    * {@inheritdoc}
    */
   public function createPayment(PaymentInterface $payment, $capture = TRUE) {
+
     $this->assertPaymentState($payment, ['new']);
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
@@ -163,7 +164,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     // If order is not a recurring order, continue with default credit card
     // transaction.
-    if ($remote_id) {
+    if (!$remote_id) {
       $data = $this->prepareTransactionData(
         $payment,
         $payment_method,
@@ -180,7 +181,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     // Mark the payment as completed.
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
-    $payment->setRemoteId($remote_Id);
+    $payment->setRemoteId($remote_id);
     $payment->save();
 
     // Fraud session IDs are specific to a payment. Remove the current ID so
@@ -589,17 +590,18 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
         ],
       ],
       'creditCard' => [
-        'cardLastFourDigits' => $payment_method->card_number->value,
-        'cardType' => $payment_method->card_type->value,
+        'cardLastFourDigits' => $payment_method->get('card_number')->getString(),
+        'cardType' => $payment_method->get('card_type')->getString(),
       ],
     ];
 
     // Add BlueSnap level2/3 data to transaction.
     $level_2_3_data = $this->enhancedData->getData(
       $payment->getOrder(),
-      $payment_method->card_type->value
+      $payment_method->get('card_type')->getString()
     );
-    $data = $data + $level_2_3_data;
+
+    //$data = $data + $level_2_3_data;
 
     // We create Vaulted Shoppers for both authenticated and anonymous users
     // and, while for authenticated users we store the Vaulted Shopper ID as the
