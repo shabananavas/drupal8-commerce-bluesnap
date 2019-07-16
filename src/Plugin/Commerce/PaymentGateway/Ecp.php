@@ -37,10 +37,11 @@ class Ecp extends OnsiteBase {
 
     // Check whether the order is a recurring order, if yes perform the
     // recurring transaction.
-    $remote_id = $this->doCreatePaymentForSubscription($payment, $capture);
+    $remote_id = $this->doCreatePaymentForSubscription($payment);
 
+    // Otherwise we have a regular transaction.
     if (!$remote_id) {
-      $data = $this->prepareTransactionData($payment, $capture);
+      $data = $this->prepareTransactionData($payment, $payment_method);
 
       // Create the payment transaction on BlueSnap.
       $client = $this->clientFactory->get(
@@ -48,7 +49,7 @@ class Ecp extends OnsiteBase {
         $this->getBluesnapConfig()
       );
       $result = $client->create($data);
-      $result_id = $result->id;
+      $remote_id = $result->id;
     }
 
     // Mark the payment as pending; it will be marked as completed when we

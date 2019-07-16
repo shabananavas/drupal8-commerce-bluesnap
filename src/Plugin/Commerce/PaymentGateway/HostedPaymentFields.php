@@ -159,11 +159,11 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     // Check whether the order is a recurring order, if yes perform the
     // recurring transaction.
-    $remote_id = $this->doCreatePaymentForSubscription($payment, $capture);
+    $remote_id = $this->doCreatePaymentForSubscription($payment);
 
     // If order is not a recurring order, continue with default credit card
     // transaction.
-    if ($remote_id) {
+    if (!$remote_id) {
       $data = $this->prepareTransactionData(
         $payment,
         $payment_method,
@@ -180,7 +180,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     // Mark the payment as completed.
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
-    $payment->setRemoteId($remote_Id);
+    $payment->setRemoteId($remote_id);
     $payment->save();
 
     // Fraud session IDs are specific to a payment. Remove the current ID so
