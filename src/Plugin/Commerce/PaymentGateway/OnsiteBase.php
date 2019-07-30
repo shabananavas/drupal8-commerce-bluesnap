@@ -21,6 +21,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\user\UserInterface;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -611,6 +612,72 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     }
 
     return FALSE;
+  }
+
+   /**
+   * Sets the remote customer ID for the given user.
+   *
+   * @param \Drupal\user\UserInterface $account
+   *   The user account.
+   * @param string $remote_id
+   *   The remote customer ID.
+   */
+  protected function setRemoteCustomerId(UserInterface $account, $remote_id) {
+    if ($account->isAuthenticated()) {
+      /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
+      $remote_ids = $account->get('commerce_remote_id');
+      $remote_ids->setByProvider(
+        $this->remoteCustomerProviderKey(),
+        $remote_id
+      );
+    }
+  }
+
+  /**
+   * Gets the remote customer ID for the given user.
+   *
+   * The remote customer ID is specific to a payment gateway instance
+   * in the configured mode. This allows the gateway to skip test customers
+   * after the gateway has been switched to live mode.
+   *
+   * @param \Drupal\user\UserInterface $account
+   *   The user account.
+   *
+   * @return string
+   *   The remote customer ID, or NULL if none found.
+   */
+  protected function getRemoteCustomerId(UserInterface $account) {
+    $remote_id = NULL;
+    if ($account->isAuthenticated()) {
+      $key = $this->remoteCustomerProviderKey();
+
+      /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
+      $remote_ids = $account->get('commerce_remote_id');
+      $remote_id = $remote_ids->getByProvider($key);
+      // Gateways used to key customer IDs by module name, migrate that data.
+      if (!$remote_id) {
+        $remote_id = $remote_ids->getByProvider($this->pluginDefinition['provider']);
+        if ($remote_id) {
+          $remote_ids->setByProvider($this->pluginDefinition['provider'], NULL);
+          $remote_ids->setByProvider(
+            $key,
+            $remote_id
+          );
+          $account->save();
+        }
+      }
+    }
+    return $remote_id;
+  }
+
+  /**
+   * Returns the provider key to be used for setting remote ID.
+   *
+   * @return string
+   *   The provider key string for setting remote ID.
+   */
+  protected function remoteCustomerProviderKey() {
+    return 'bluesnap|' . $this->configuration['username'] . '|'. $this->getMode();
   }
 
 }
