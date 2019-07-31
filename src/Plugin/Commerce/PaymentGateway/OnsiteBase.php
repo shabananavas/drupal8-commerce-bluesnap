@@ -21,6 +21,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\user\UserInterface;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -611,6 +612,45 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     }
 
     return FALSE;
+  }
+
+   /**
+    * {@inheritdoc}
+   */
+  protected function setRemoteCustomerId(UserInterface $account, $remote_id) {
+    if (!$account->isAuthenticated()) {
+      return;
+    }
+
+    /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
+    $remote_ids = $account->get('commerce_remote_id');
+    $remote_ids->setByProvider(
+      $this->remoteCustomerIdProviderKey(),
+      $remote_id
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function getRemoteCustomerId(UserInterface $account) {
+    if (!$account->isAuthenticated()) {
+      return;
+    }
+
+    return $account
+      ->get('commerce_remote_id')
+      ->getByProvider($this->remoteCustomerIdProviderKey());
+  }
+
+  /**
+   * Returns the provider key to be used for setting remote ID.
+   *
+   * @return string
+   *   The provider key string for setting remote ID.
+   */
+  protected function remoteCustomerIdProviderKey() {
+    return 'bluesnap_' . $this->configuration['username'] . '|'. $this->getMode();
   }
 
 }
