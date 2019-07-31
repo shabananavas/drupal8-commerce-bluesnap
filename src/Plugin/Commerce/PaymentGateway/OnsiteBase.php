@@ -615,59 +615,32 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   }
 
    /**
-   * Sets the remote customer ID for the given user.
-   *
-   * @param \Drupal\user\UserInterface $account
-   *   The user account.
-   * @param string $remote_id
-   *   The remote customer ID.
+    * {@inheritdoc}
    */
   protected function setRemoteCustomerId(UserInterface $account, $remote_id) {
-    if ($account->isAuthenticated()) {
-      /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
-      $remote_ids = $account->get('commerce_remote_id');
-      $remote_ids->setByProvider(
-        $this->remoteCustomerProviderKey(),
-        $remote_id
-      );
+    if (!$account->isAuthenticated()) {
+      return;
     }
+
+    /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
+    $remote_ids = $account->get('commerce_remote_id');
+    $remote_ids->setByProvider(
+      $this->remoteCustomerIdProviderKey(),
+      $remote_id
+    );
   }
 
   /**
-   * Gets the remote customer ID for the given user.
-   *
-   * The remote customer ID is specific to a payment gateway instance
-   * in the configured mode. This allows the gateway to skip test customers
-   * after the gateway has been switched to live mode.
-   *
-   * @param \Drupal\user\UserInterface $account
-   *   The user account.
-   *
-   * @return string
-   *   The remote customer ID, or NULL if none found.
+   * {@inheritdoc}
    */
   protected function getRemoteCustomerId(UserInterface $account) {
-    $remote_id = NULL;
-    if ($account->isAuthenticated()) {
-      $key = $this->remoteCustomerProviderKey();
-
-      /** @var \Drupal\commerce\Plugin\Field\FieldType\RemoteIdFieldItemListInterface $remote_ids */
-      $remote_ids = $account->get('commerce_remote_id');
-      $remote_id = $remote_ids->getByProvider($key);
-      // Gateways used to key customer IDs by module name, migrate that data.
-      if (!$remote_id) {
-        $remote_id = $remote_ids->getByProvider($this->pluginDefinition['provider']);
-        if ($remote_id) {
-          $remote_ids->setByProvider($this->pluginDefinition['provider'], NULL);
-          $remote_ids->setByProvider(
-            $key,
-            $remote_id
-          );
-          $account->save();
-        }
-      }
+    if (!$account->isAuthenticated()) {
+      return;
     }
-    return $remote_id;
+
+    return $account
+      ->get('commerce_remote_id')
+      ->getByProvider($this->remoteCustomerIdProviderKey());
   }
 
   /**
@@ -676,8 +649,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    * @return string
    *   The provider key string for setting remote ID.
    */
-  protected function remoteCustomerProviderKey() {
-    return 'bluesnap|' . $this->configuration['username'] . '|'. $this->getMode();
+  protected function remoteCustomerIdProviderKey() {
+    return 'bluesnap_' . $this->configuration['username'] . '|'. $this->getMode();
   }
 
 }
