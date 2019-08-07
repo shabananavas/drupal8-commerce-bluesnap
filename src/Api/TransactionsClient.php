@@ -91,8 +91,9 @@ class TransactionsClient implements TransactionsClientInterface {
       $transaction_id
     );
     $this->logger->warning($message);
-    throw new HardDeclineException('We encountered an error processing the refund.
-      Please try again later.');
+    throw new HardDeclineException('
+      We encountered an error processing the refund. Please try again later.'
+    );
   }
 
 }
