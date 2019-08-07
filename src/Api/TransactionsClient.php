@@ -3,7 +3,7 @@
 namespace Drupal\commerce_bluesnap\Api;
 
 use Drupal\commerce_payment\Exception\HardDeclineException;
-use Drupal\commerce_payment\Exception\InvalidResponseException;
+use Drupal\commerce_payment\Exception\PaymentGatewayException;
 
 use Bluesnap\CardTransaction;
 use Bluesnap\Refund;
@@ -92,7 +92,7 @@ class TransactionsClient implements TransactionsClientInterface {
       $transaction_id
     );
     $this->logger->warning($message);
-    throw new InvalidResponseException('
+    throw new PaymentGatewayException('
       We encountered an error processing the refund. Please try again later.'
     );
   }
