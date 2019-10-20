@@ -162,29 +162,30 @@ class Handler implements HandlerInterface {
    *   If the payment entity could not be found e.g. no longer exists.
    */
   protected function getPaymentEntity(array $ipn_data) {
-    if (empty($ipn_data['merchantTransactionId'])) {
+    if (empty($ipn_data['referenceNumber'])) {
       $message = sprintf(
-        'Cannot determine the payment ID for IPN of type "%s".',
+        'Cannot determine the transaction ID for IPN of type "%s".',
         $this->getType($ipn_data)
       );
       $this->logger->error($message);
       throw new BadRequestHttpException('Transaction ID required.');
     }
 
-    $payment = $this->entityTypeManager
-      ->getStorage('commerce_payment')
-      ->load($ipn_data['merchantTransactionId']);
-    if (!$payment) {
+    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+    $payment_id = $payment_storage->getQuery()
+      ->condition('remote_id', $ipn_data['referenceNumber'])
+      ->execute();
+    if (!$payment_id) {
       $message = sprintf(
-        'Payment with ID "%s" not found for IPN of type "%s".',
-        $ipn_data['merchantTransactionId'],
+        'Payment with transaction ID "%s" not found for IPN of type "%s".',
+        $ipn_data['referenceNumber'],
         $this->getType($ipn_data)
       );
       $this->logger->error($message);
       throw new NotFoundHttpException('Transaction could not be found.');
     }
 
-    return $payment;
+    return $payment_storage->load($payment_id);
   }
 
   /**
