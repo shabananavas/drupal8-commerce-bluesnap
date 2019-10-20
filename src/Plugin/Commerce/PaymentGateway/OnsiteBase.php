@@ -18,6 +18,7 @@ use Drupal\commerce_price\Price;
 use Drupal\commerce_price\RounderInterface;
 
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -43,6 +44,13 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    * @var \Drupal\commerce_price\RounderInterface
    */
   protected $rounder;
+
+  /**
+   * The UUID generator service.
+   *
+   * @var \Drupal\Component\Uuid\UuidInterface
+   */
+  protected $uuid;
 
   /**
    * The Bluesnap API client factory.
@@ -79,6 +87,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The module handler.
    * @param \Drupal\commerce_price\RounderInterface $rounder
    *   The rounder.
+   * @param \Drupal\Component\Uuid\UuidInterface $uuid
+   *   The UUID generator service.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
@@ -94,6 +104,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     TimeInterface $time,
     ModuleHandlerInterface $module_handler,
     RounderInterface $rounder,
+    UuidInterface $uuid,
     ClientFactory $client_factory,
     IpnHandlerInterface $ipn_handler
   ) {
@@ -109,6 +120,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
 
     $this->moduleHandler = $module_handler;
     $this->rounder = $rounder;
+    $this->uuid = $uuid;
     $this->clientFactory = $client_factory;
     $this->ipnHandler = $ipn_handler;
   }
@@ -131,6 +143,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $container->get('datetime.time'),
       $container->get('module_handler'),
       $container->get('commerce_price.rounder'),
+      $container->get('uuid'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.ipn_handler')
     );
@@ -320,6 +333,17 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   );
 
   /**
+   * Prepares the data required for creating a BlueSnap subscription.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return array
+   *   The subscription data array as required by BlueSnap.
+   */
+  abstract protected function prepareSubscriptionData(PaymentInterface $payment);
+
+  /**
    * Prepares the billing contact info from the billing profile.
    *
    * This is the format for the billing info added to a payment source.
@@ -387,8 +411,9 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
    *   The payment.
    *
-   * @return int
-   *   The BlueSnap transaction ID for the charge.
+   * @return array
+   *   An array containing the BlueSnap transaction ID and the merchant
+   *   transaction ID for the charge.
    */
   protected function doCreatePaymentForSubscription(PaymentInterface $payment) {
     $order = $payment->getOrder();
@@ -419,7 +444,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       // The Commerce Subscription entity where we want to store the remote
       // subscription ID is not create yet at this point. We will store it when
       // we receive the CHARGE IPN.
-      return $result->transactionId;
+      return [$result->transactionId, $data['merchantTransactionId']];
     }
   }
 
@@ -519,7 +544,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   }
 
   /**
-   * Prepares the transaction data required for BlueSnap subscription API.
+   * Prepares the data required for creating a BlueSnap subscription charge.
    *
    * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
    *   The payment.
@@ -535,6 +560,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     return [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
+      'merchantTransactionId' => $this->uuid->generate(),
     ];
   }
 

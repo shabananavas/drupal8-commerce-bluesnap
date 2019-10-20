@@ -2,8 +2,6 @@
 
 namespace Drupal\commerce_bluesnap\Plugin\Commerce\PaymentType;
 
-use Drupal\commerce_payment\Plugin\Commerce\PaymentType\PaymentTypeBase;
-
 /**
  * Provides the payment type for ACH/ECP transactions.
  *
@@ -13,13 +11,4 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentType\PaymentTypeBase;
  *   workflow = "payment_bluesnap_ecp",
  * )
  */
-class Ecp extends PaymentTypeBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildFieldDefinitions() {
-    return [];
-  }
-
-}
+class Ecp extends PaymentTypeBase {}

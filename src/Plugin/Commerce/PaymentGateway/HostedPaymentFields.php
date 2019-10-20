@@ -19,6 +19,7 @@ use Drupal\commerce_price\Price;
 use Drupal\commerce_price\RounderInterface;
 
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 
@@ -37,6 +38,7 @@ use Symfony\Component\HttpFoundation\Request;
  *   "Drupal\commerce_bluesnap\PluginForm\Bluesnap\HostedPaymentFieldsPaymentMethodAddForm",
  *   },
  *   payment_method_types = {"credit_card"},
+ *   payment_type = "bluesnap_card",
  *   credit_card_types = {
  *     "amex", "dinersclub", "discover", "jcb", "mastercard", "visa",
  *   },
@@ -80,6 +82,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The module handler.
    * @param \Drupal\commerce_price\RounderInterface $rounder
    *   The rounder.
+   * @param \Drupal\Component\Uuid\UuidInterface $uuid
+   *   The UUID generator service.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
@@ -99,6 +103,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     TimeInterface $time,
     ModuleHandlerInterface $module_handler,
     RounderInterface $rounder,
+    UuidInterface $uuid,
     ClientFactory $client_factory,
     IpnHandlerInterface $ipn_handler,
     DataInterface $enhanced_data,
@@ -114,6 +119,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $time,
       $module_handler,
       $rounder,
+      $uuid,
       $client_factory,
       $ipn_handler
     );
@@ -140,6 +146,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $container->get('datetime.time'),
       $container->get('module_handler'),
       $container->get('commerce_price.rounder'),
+      $container->get('uuid'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.ipn_handler'),
       $container->get('commerce_bluesnap.enhanced_data'),
@@ -156,10 +163,14 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     $this->assertPaymentMethod($payment_method);
 
     $remote_id = NULL;
+    $merchant_transaction_id = NULL;
 
     // Check whether the order is a recurring order, if yes perform the
     // recurring transaction.
-    $remote_id = $this->doCreatePaymentForSubscription($payment);
+    list(
+      $remote_id,
+      $merchant_transaction_id
+    ) = $this->doCreatePaymentForSubscription($payment);
 
     // If order is not a recurring order, continue with default credit card
     // transaction.
@@ -175,12 +186,14 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       );
       $transaction = $client->create($data);
       $remote_id = $transaction->id;
+      $merchant_transaction_id = $data['merchantTransactionId'];
     }
 
     // Mark the payment as completed.
     $next_state = $capture ? 'completed' : 'authorization';
     $payment->setState($next_state);
     $payment->setRemoteId($remote_id);
+    $payment->set('bluesnap_merchant_transaction_id', $merchant_transaction_id);
     $payment->save();
 
     // Fraud session IDs are specific to a payment. Remove the current ID so
@@ -571,6 +584,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
       'cardTransactionType' => $capture ? 'AUTH_CAPTURE' : 'AUTH_ONLY',
+      'merchantTransactionId' => $this->uuid->generate(),
       'transactionFraudInfo' => [
         'fraudSessionId' => $this->fraudSession->get(),
       ],
@@ -721,6 +735,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     $data = [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
+      'merchantTransactionId' => $this->uuid->generate(),
       'transactionFraudInfo' => [
         'fraudSessionId' => $this->fraudSession->get(),
       ],

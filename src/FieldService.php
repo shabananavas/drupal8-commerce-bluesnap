@@ -2,6 +2,7 @@
 
 namespace Drupal\commerce_bluesnap;
 
+use Drupal\entity\BundleFieldDefinition;
 use Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 
@@ -29,6 +30,24 @@ class FieldService {
     EntityDefinitionUpdateManagerInterface $definition_manager
   ) {
     $this->definitionManager = $definition_manager;
+  }
+
+  /**
+   * Provides the field definition for the merchant transaction ID field.
+   *
+   * @return \Drupal\Core\Field\BaseFieldDefinition
+   *   The field definition.
+   */
+  public static function paymentMerchantTransactionIdFieldDefinition() {
+    return BundleFieldDefinition::create('string')
+      ->setLabel(t('Merchant Transaction ID'))
+      ->setDescription(t('The transaction ID sent to BlueSnap for a payment.'))
+      ->setCardinality(1)
+      ->setReadOnly(TRUE)
+      ->setTranslatable(FALSE)
+      ->setSetting('max_length', 36)
+      ->setSetting('is_ascii', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
   }
 
   /**
