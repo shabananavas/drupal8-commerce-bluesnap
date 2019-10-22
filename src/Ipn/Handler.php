@@ -171,11 +171,10 @@ class Handler implements HandlerInterface {
       throw new BadRequestHttpException('Transaction ID required.');
     }
 
-    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-    $payment_id = $payment_storage->getQuery()
-      ->condition('remote_id', $ipn_data['referenceNumber'])
-      ->execute();
-    if (!$payment_id) {
+    $payment = $this->entityTypeManager
+      ->getStorage('commerce_payment')
+      ->loadByRemoteId($ipn_data['referenceNumber']);
+    if (!$payment) {
       $message = sprintf(
         'Payment with transaction ID "%s" not found for IPN of type "%s".',
         $ipn_data['referenceNumber'],
@@ -185,7 +184,7 @@ class Handler implements HandlerInterface {
       throw new NotFoundHttpException('Transaction could not be found.');
     }
 
-    return $payment_storage->load($payment_id);
+    return $payment;
   }
 
   /**
