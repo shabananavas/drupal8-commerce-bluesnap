@@ -346,12 +346,24 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     );
     $ipn_type = $this->ipnHandler->getType($ipn_data);
 
+    // If the IPN was not intended for our gateway, don't do anything.
+    if (!$this->ipnHandler->ipnIsForGateway(
+      $ipn_data,
+      OnsiteInterface::IPN_HPP_PAYMENT_METHOD_NAME
+    )) {
+      return;
+    }
+
     // Delegate to the appropriate method based on type.
     switch ($ipn_type) {
       case IpnHandlerInterface::IPN_TYPE_CHARGE:
         $this->ipnCharge($ipn_data);
+
+        break;
       case IpnHandlerInterface::IPN_TYPE_REFUND:
         $this->ipnRefund($ipn_data);
+
+        break;
     }
   }
 
@@ -667,7 +679,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
 
     // Get the refund amount.
     $refund_amount = new Price(
-      $ipn_data['invoiceChargeAmount'],
+      $ipn_data['reversalAmount'],
       $ipn_data['invoiceChargeCurrency']
     );
 

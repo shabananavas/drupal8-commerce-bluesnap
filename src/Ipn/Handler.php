@@ -214,4 +214,23 @@ class Handler implements HandlerInterface {
     }
   }
 
+  /**
+   * Checks whether the IPN is for the intended payment gateway.
+   *
+   * @param array $ipn_data
+   *   The request data.
+   * @param string $payment_method_name
+   *   The expected payment method name that should be in the IPN.
+   *
+   * @return bool
+   *   Returns TRUE if the IPN is for the intended gateway.
+   */
+  public function ipnIsForGateway($ipn_data, $payment_method_name) {
+    if ($ipn_data['paymentMethod'] === $payment_method_name) {
+      return TRUE;
+    }
+
+    return FALSE;
+  }
+
 }

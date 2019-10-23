@@ -113,4 +113,17 @@ interface HandlerInterface {
    */
   public function getEntity(array $ipn_data);
 
+  /**
+   * Returns TRUE if the IPN is for the intended payment gateway.
+   *
+   * @param array $ipn_data
+   *   The request data.
+   * @param string $payment_method_name
+   *   The expected payment method name that should be in the IPN.
+   *
+   * @return bool
+   *   Returns TRUE if the IPN is for the intended gateway.
+   */
+  public function ipnIsForGateway($ipn_data, $payment_method_name);
+
 }

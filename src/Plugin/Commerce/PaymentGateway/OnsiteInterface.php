@@ -16,4 +16,15 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterf
 interface OnsiteInterface extends
   OnsitePaymentGatewayInterface,
   SupportsRefundsInterface,
-  SupportsNotificationsInterface {}
+  SupportsNotificationsInterface {
+
+  /**
+   * Indicates the payment_method name for the HPP gateway in the incoming IPN.
+   */
+  const IPN_HPP_PAYMENT_METHOD_NAME = 'CC';
+
+  /**
+   * Indicates the payment_method name for the ECP gateway in the incoming IPN.
+   */
+  const IPN_ECP_PAYMENT_METHOD_NAME = 'ECP';
+}
