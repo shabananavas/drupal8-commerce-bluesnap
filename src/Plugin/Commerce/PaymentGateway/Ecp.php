@@ -20,6 +20,7 @@ use Symfony\Component\HttpFoundation\Request;
  *   display_label = "BlueSnap (ACH/ECP)",
  *   forms = {
  *     "add-payment-method" = "Drupal\commerce_bluesnap\PluginForm\Bluesnap\EcpPaymentMethodAddForm",
+ *     "refund-payment" = "Drupal\commerce_bluesnap\PluginForm\Bluesnap\PaymentRefundForm",
  *   },
  *   payment_method_types = {"bluesnap_ecp"},
  *   payment_type = "bluesnap_ecp",
