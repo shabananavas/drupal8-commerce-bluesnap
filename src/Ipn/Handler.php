@@ -71,7 +71,11 @@ class Handler implements HandlerInterface {
   /**
    * {@inheritdoc}
    */
-  public function parseRequestData(Request $request, array $supported_types) {
+  public function parseRequestData(
+    Request $request,
+    array $supported_types,
+    $env
+  ) {
     $data_array = [];
 
     $data_string = html_entity_decode($request->getContent());
@@ -86,7 +90,7 @@ class Handler implements HandlerInterface {
     }
 
     // Validate that the IPN type is supported by the caller.
-    $this->validateType($data_array, $supported_types);
+    $this->validateType($data_array, $supported_types, $env);
 
     return $data_array;
   }
@@ -123,6 +127,9 @@ class Handler implements HandlerInterface {
    *
    * @param array $ipn_data
    *   The data of the IPN request.
+   *
+   * @return mixed
+   *   Returns the group transaction ID if the IPN type is supported.
    *
    * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
    *   If the IPN is of a type unknown/unsupported by this module.
@@ -225,7 +232,7 @@ class Handler implements HandlerInterface {
    * @return bool
    *   Returns TRUE if the IPN is for the intended gateway.
    */
-  public function ipnIsForGateway($ipn_data, $payment_method_name) {
+  public function ipnIsForGateway(array $ipn_data, $payment_method_name) {
     if ($ipn_data['paymentMethod'] === $payment_method_name) {
       return TRUE;
     }

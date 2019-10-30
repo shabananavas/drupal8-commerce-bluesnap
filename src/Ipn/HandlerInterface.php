@@ -79,6 +79,8 @@ interface HandlerInterface {
    *   The request object.
    * @param array $supported_types
    *   The IPN types supported by the payment gateway.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
    *
    * @return array
    *   An associative array containing the data (content) of the request.
@@ -86,7 +88,11 @@ interface HandlerInterface {
    * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
    *   If the IPN is not of a supported type.
    */
-  public function parseRequestData(Request $request, array $supported_types);
+  public function parseRequestData(
+    Request $request,
+    array $supported_types,
+    $env
+  );
 
   /**
    * Returns IPN type for the given IPN data.

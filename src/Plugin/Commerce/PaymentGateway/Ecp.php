@@ -160,7 +160,8 @@ class Ecp extends OnsiteBase {
       [
         IpnHandlerInterface::IPN_TYPE_CHARGE,
         IpnHandlerInterface::IPN_TYPE_REFUND,
-      ]
+      ],
+      $this->getEnvironment()
     );
     $ipn_type = $this->ipnHandler->getType($ipn_data);
 
