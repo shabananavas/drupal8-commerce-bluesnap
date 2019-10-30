@@ -21,7 +21,7 @@ class PaymentRefundForm extends BasePaymentRefundForm {
     // As we are letting the incoming BlueSnap IPN perform the actual updating
     // of this payment, the changes might not be immediately reflected in the
     // UI. So, inform the user of the same so that they are not confused.
-    // @see the refundPayment() function in the OnsiteBase for more info.
+    // @see \Drupal\commerce_bluesnap\Plugin\Commerce\PaymentGateway\OnsiteBase::refundPayment()
     $form = parent::buildConfigurationForm($form, $form_state);
     $form['#success_message'] = t(
       'The payment refund has been initiated on BlueSnap.
