@@ -71,6 +71,20 @@ class Handler implements HandlerInterface {
   /**
    * {@inheritdoc}
    */
+  public function validatePaymentMethod($ipn_data, $payment_method_name) {
+    if (!isset($ipn_data['paymentMethod'])) {
+      return FALSE;
+    }
+    if ($ipn_data['paymentMethod'] !== $payment_method_name) {
+      return FALSE;
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function parseRequestData(Request $request, array $supported_types) {
     $data_array = [];
 
@@ -212,25 +226,6 @@ class Handler implements HandlerInterface {
       $this->logger->error($message);
       throw new BadRequestHttpException('Unsupported IPN type.');
     }
-  }
-
-  /**
-   * Checks whether the IPN is for the intended payment gateway.
-   *
-   * @param array $ipn_data
-   *   The request data.
-   * @param string $payment_method_name
-   *   The expected payment method name that should be in the IPN.
-   *
-   * @return bool
-   *   Returns TRUE if the IPN is for the intended gateway.
-   */
-  public function ipnIsForGateway($ipn_data, $payment_method_name) {
-    if ($ipn_data['paymentMethod'] === $payment_method_name) {
-      return TRUE;
-    }
-
-    return FALSE;
   }
 
 }
