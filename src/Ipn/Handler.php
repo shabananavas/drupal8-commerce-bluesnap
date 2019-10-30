@@ -204,19 +204,25 @@ class Handler implements HandlerInterface {
    *   The data of the IPN request.
    * @param array $supported_types
    *   The IPN types to validate against.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
    *
    * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
    *   If the IPN is not of a supported type.
    */
-  public function validateType(array $ipn_data, array $supported_types) {
+  public function validateType(array $ipn_data, array $supported_types, $env) {
     $ipn_type = $this->getType($ipn_data);
 
     if (!in_array($ipn_type, $supported_types)) {
-      $message = sprintf(
-        'IPN of type "%s" is not supported by the payment gateway.',
-        $ipn_type
-      );
-      $this->logger->error($message);
+      // Only log the message in non-production environments.
+      if ($env !== 'production') {
+        $message = sprintf(
+          'IPN of type "%s" is not supported by the payment gateway.',
+          $ipn_type
+        );
+        $this->logger->error($message);
+      }
+
       throw new BadRequestHttpException('Unsupported IPN type.');
     }
   }
