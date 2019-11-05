@@ -203,26 +203,16 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     $amount = $this->rounder->round($amount);
     $this->assertRefundAmount($payment, $amount);
 
-    // Refund the payment transaction on BlueSnap.
+    // Don't update the payment now, just refund the payment transaction on
+    // BlueSnap because it will trigger a refund IPN from BlueSnap. The IPN
+    // handler will then take care of the actual updating of this payment in
+    // Drupal.
     $data = ['amount' => $amount->getNumber()];
     $client = $this->clientFactory->get(
       TransactionsClientInterface::API_ID,
       $this->getBluesnapConfig()
     );
     $client->refund($payment->getRemoteId(), $data);
-
-    // Update the payment.
-    $old_refunded_amount = $payment->getRefundedAmount();
-    $new_refunded_amount = $old_refunded_amount->add($amount);
-    if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->setState('partially_refunded');
-    }
-    else {
-      $payment->setState('refunded');
-    }
-
-    $payment->setRefundedAmount($new_refunded_amount);
-    $payment->save();
   }
 
   /**

@@ -33,8 +33,8 @@ use Symfony\Component\HttpFoundation\Request;
  *   label = "BlueSnap (Hosted Payment Fields)",
  *   display_label = "BlueSnap",
  *   forms = {
- *     "add-payment-method" =
- *   "Drupal\commerce_bluesnap\PluginForm\Bluesnap\HostedPaymentFieldsPaymentMethodAddForm",
+ *     "add-payment-method" = "Drupal\commerce_bluesnap\PluginForm\Bluesnap\HostedPaymentFieldsPaymentMethodAddForm",
+ *     "refund-payment" = "Drupal\commerce_bluesnap\PluginForm\Bluesnap\PaymentRefundForm",
  *   },
  *   payment_method_types = {"credit_card"},
  *   credit_card_types = {
