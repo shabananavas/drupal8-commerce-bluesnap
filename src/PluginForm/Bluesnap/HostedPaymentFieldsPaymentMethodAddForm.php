@@ -265,7 +265,10 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       $store = $order->getStore();
     }
     else {
-      $store = $this->storeStorage->loadDefault();
+      $store = $this
+        ->entityTypeManager
+        ->getStorage('commerce_store')
+        ->loadDefault();
     }
 
     $store_config = NULL;
