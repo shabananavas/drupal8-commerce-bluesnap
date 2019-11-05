@@ -359,8 +359,11 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     switch ($ipn_type) {
       case IpnHandlerInterface::IPN_TYPE_CHARGE:
         $this->ipnCharge($ipn_data);
+        break;
+
       case IpnHandlerInterface::IPN_TYPE_REFUND:
         $this->ipnRefund($ipn_data);
+        break;
     }
   }
 
