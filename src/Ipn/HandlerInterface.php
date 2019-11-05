@@ -73,6 +73,19 @@ interface HandlerInterface {
   public function checkRequestAccess(Request $request, $env);
 
   /**
+   * Checks whether the IPN is for the intended payment gateway.
+   *
+   * @param array $ipn_data
+   *   The request data.
+   * @param string $payment_method_name
+   *   The expected payment method name that should be in the IPN.
+   *
+   * @return bool
+   *   Returns TRUE if the IPN is for the intended gateway, FALSE otherwise.
+   */
+  public function validatePaymentMethod(array $ipn_data, $payment_method_name);
+
+  /**
    * Parses the request and returns its data as an array.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
@@ -113,23 +126,12 @@ interface HandlerInterface {
    *
    * @param array $ipn_data
    *   The request data.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
    *
    * @return \Drupal\Entity\EntityInterface
    *   The Drupal entity related to the given IPN data.
    */
-  public function getEntity(array $ipn_data);
-
-  /**
-   * Returns TRUE if the IPN is for the intended payment gateway.
-   *
-   * @param array $ipn_data
-   *   The request data.
-   * @param string $payment_method_name
-   *   The expected payment method name that should be in the IPN.
-   *
-   * @return bool
-   *   Returns TRUE if the IPN is for the intended gateway.
-   */
-  public function ipnIsForGateway($ipn_data, $payment_method_name);
+  public function getEntity(array $ipn_data, $env);
 
 }

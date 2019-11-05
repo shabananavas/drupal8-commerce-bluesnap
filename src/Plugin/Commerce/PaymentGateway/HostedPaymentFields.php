@@ -345,25 +345,25 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       ],
       $this->getEnvironment()
     );
-    $ipn_type = $this->ipnHandler->getType($ipn_data);
 
     // If the IPN was not intended for our gateway, don't do anything.
-    if (!$this->ipnHandler->ipnIsForGateway(
+    $payment_method_is_valid = $this->ipnHandler->validatePaymentMethod(
       $ipn_data,
-      OnsiteInterface::IPN_HPP_PAYMENT_METHOD_NAME
-    )) {
+      self::REMOTE_PAYMENT_METHOD_NAME_CC
+    );
+    if (!$payment_method_is_valid) {
       return;
     }
 
     // Delegate to the appropriate method based on type.
+    $ipn_type = $this->ipnHandler->getType($ipn_data);
     switch ($ipn_type) {
       case IpnHandlerInterface::IPN_TYPE_CHARGE:
         $this->ipnCharge($ipn_data);
-
         break;
+
       case IpnHandlerInterface::IPN_TYPE_REFUND:
         $this->ipnRefund($ipn_data);
-
         break;
     }
   }
@@ -653,7 +653,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The IPN request data.
    */
   protected function ipnCharge(array $ipn_data) {
-    $payment = $this->ipnHandler->getEntity($ipn_data);
+    $payment = $this->ipnHandler->getEntity($ipn_data, $this->getEnvironment());
     $order = $payment->getOrder();
 
     $subscription_id = NULL;
@@ -676,26 +676,17 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The IPN request data.
    */
   protected function ipnRefund(array $ipn_data) {
-    $payment = $this->ipnHandler->getEntity($ipn_data);
+    $payment = $this->ipnHandler->getEntity($ipn_data, $this->getEnvironment());
+    $payment_amount = $payment->getAmount();
 
-    // Get the refund amount.
+    // Get the refund amount. When getting the refunded amount from
+    // `reversalAmount` the currency is not specifically given; it is assumed
+    // the currency of the original transaction which should be the payment's
+    // currency.
     $refund_amount = new Price(
       $ipn_data['reversalAmount'],
-      $ipn_data['invoiceChargeCurrency']
+      $payment_amount->getCurrencyCode()
     );
-
-    // The refund amount should always be given at the currency of the
-    // transaction. If not, there's something wrong.
-    $payment_amount = $payment->getAmount();
-    if ($payment_amount->getCurrencyCode() !== $refund_amount->getCurrencyCode()) {
-      $message = sprintf(
-        'The currency for the refund received for payment with ID "%s" was "s", "%s" expected',
-        $payment->id(),
-        $refund_amount->getCurrencyCode(),
-        $payment_amount->getCurrencyCode()
-      );
-      throw new \InvalidArgumentException($message);
-    }
 
     // Update the payment.
     $old_refunded_amount = $payment->getRefundedAmount();

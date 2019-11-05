@@ -19,12 +19,13 @@ interface OnsiteInterface extends
   SupportsNotificationsInterface {
 
   /**
-   * Indicates the payment_method name for the HPP gateway in the incoming IPN.
+   * Indicates the remote payment method name for Card transactions.
    */
-  const IPN_HPP_PAYMENT_METHOD_NAME = 'CC';
+  const REMOTE_PAYMENT_METHOD_NAME_CC = 'CC';
 
   /**
-   * Indicates the payment_method name for the ECP gateway in the incoming IPN.
+   * Indicates the remote payment method name for ECP transactions.
    */
-  const IPN_ECP_PAYMENT_METHOD_NAME = 'ECP';
+  const REMOTE_PAYMENT_METHOD_NAME_ECP = 'ECP';
+
 }
