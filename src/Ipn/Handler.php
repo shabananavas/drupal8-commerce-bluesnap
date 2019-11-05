@@ -71,6 +71,20 @@ class Handler implements HandlerInterface {
   /**
    * {@inheritdoc}
    */
+  public function validatePaymentMethod($ipn_data, $payment_method_name) {
+    if (!isset($ipn_data['paymentMethod'])) {
+      return FALSE;
+    }
+    if ($ipn_data['paymentMethod'] !== $payment_method_name) {
+      return FALSE;
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function parseRequestData(Request $request, array $supported_types) {
     $data_array = [];
 

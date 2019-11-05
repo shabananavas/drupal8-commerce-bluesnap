@@ -16,4 +16,16 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterf
 interface OnsiteInterface extends
   OnsitePaymentGatewayInterface,
   SupportsRefundsInterface,
-  SupportsNotificationsInterface {}
+  SupportsNotificationsInterface {
+
+  /**
+   * Indicates the remote payment method name for Card transactions.
+   */
+  const REMOTE_PAYMENT_METHOD_NAME_CC = 'CC';
+
+  /**
+   * Indicates the remote payment method name for ECP transactions.
+   */
+  const REMOTE_PAYMENT_METHOD_NAME_ECP = 'ECP';
+
+}

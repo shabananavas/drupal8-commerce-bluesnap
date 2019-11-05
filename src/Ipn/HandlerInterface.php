@@ -73,6 +73,19 @@ interface HandlerInterface {
   public function checkRequestAccess(Request $request, $env);
 
   /**
+   * Checks whether the IPN is for the intended payment gateway.
+   *
+   * @param array $ipn_data
+   *   The request data.
+   * @param string $payment_method_name
+   *   The expected payment method name that should be in the IPN.
+   *
+   * @return bool
+   *   Returns TRUE if the IPN is for the intended gateway, FALSE otherwise.
+   */
+  public function validatePaymentMethod($ipn_data, $payment_method_name);
+
+  /**
    * Parses the request and returns its data as an array.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request

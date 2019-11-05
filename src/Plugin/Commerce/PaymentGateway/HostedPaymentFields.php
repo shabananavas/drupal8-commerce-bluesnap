@@ -344,9 +344,18 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
         IpnHandlerInterface::IPN_TYPE_REFUND,
       ]
     );
-    $ipn_type = $this->ipnHandler->getType($ipn_data);
+
+    // If the IPN was not intended for our gateway, don't do anything.
+    $payment_method_is_valid = $this->ipnHandler->validatePaymentMethod(
+      $ipn_data,
+      self::REMOTE_PAYMENT_METHOD_NAME_CC
+    );
+    if (!$payment_method_is_valid) {
+      return;
+    }
 
     // Delegate to the appropriate method based on type.
+    $ipn_type = $this->ipnHandler->getType($ipn_data);
     switch ($ipn_type) {
       case IpnHandlerInterface::IPN_TYPE_CHARGE:
         $this->ipnCharge($ipn_data);
