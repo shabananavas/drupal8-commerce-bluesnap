@@ -14,7 +14,7 @@ function commerce_bluesnap_requirements($phase) {
   }
 
   // All good if the library exists.
-  if (class_exists('\Bluesnap')) {
+  if (class_exists('\Bluesnap\Bluesnap')) {
     return [];
   }
 
