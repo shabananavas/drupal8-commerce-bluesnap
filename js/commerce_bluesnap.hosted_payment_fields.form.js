@@ -249,6 +249,9 @@
                 $('#bluesnap-cc-expiry', $form).val(callback.cardData.exp);
 
                 // Finally, submit the form.
+                var $primaryButton = $form.find(':input.button--primary');
+                $form.append('<input type="hidden" name="_triggering_element_name" value="' + $primaryButton.attr('name') + '" />');
+                $form.append('<input type="hidden" name="_triggering_element_value" value="' + $primaryButton.val() + '" />');
                 $form.get(0).submit();
               }
             });
