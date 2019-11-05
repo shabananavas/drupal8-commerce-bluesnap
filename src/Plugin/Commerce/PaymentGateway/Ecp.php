@@ -160,7 +160,8 @@ class Ecp extends OnsiteBase {
       [
         IpnHandlerInterface::IPN_TYPE_CHARGE,
         IpnHandlerInterface::IPN_TYPE_REFUND,
-      ]
+      ],
+      $this->getEnvironment()
     );
 
     // If the IPN was not intended for our gateway, don't do anything.
@@ -429,7 +430,7 @@ class Ecp extends OnsiteBase {
    *   The IPN request data.
    */
   protected function ipnCharge(array $ipn_data) {
-    $payment = $this->ipnHandler->getEntity($ipn_data);
+    $payment = $this->ipnHandler->getEntity($ipn_data, $this->getEnvironment());
     $order = $payment->getOrder();
 
     $subscription_id = NULL;
@@ -464,7 +465,7 @@ class Ecp extends OnsiteBase {
    *   The IPN request data.
    */
   protected function ipnRefund(array $ipn_data) {
-    $payment = $this->ipnHandler->getEntity($ipn_data);
+    $payment = $this->ipnHandler->getEntity($ipn_data, $this->getEnvironment());
     $payment_amount = $payment->getAmount();
 
     // Get the refund amount. When getting the refunded amount from

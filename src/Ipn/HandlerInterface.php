@@ -83,7 +83,7 @@ interface HandlerInterface {
    * @return bool
    *   Returns TRUE if the IPN is for the intended gateway, FALSE otherwise.
    */
-  public function validatePaymentMethod($ipn_data, $payment_method_name);
+  public function validatePaymentMethod(array $ipn_data, $payment_method_name);
 
   /**
    * Parses the request and returns its data as an array.
@@ -92,6 +92,8 @@ interface HandlerInterface {
    *   The request object.
    * @param array $supported_types
    *   The IPN types supported by the payment gateway.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
    *
    * @return array
    *   An associative array containing the data (content) of the request.
@@ -99,7 +101,11 @@ interface HandlerInterface {
    * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
    *   If the IPN is not of a supported type.
    */
-  public function parseRequestData(Request $request, array $supported_types);
+  public function parseRequestData(
+    Request $request,
+    array $supported_types,
+    $env
+  );
 
   /**
    * Returns IPN type for the given IPN data.
@@ -120,10 +126,12 @@ interface HandlerInterface {
    *
    * @param array $ipn_data
    *   The request data.
+   * @param string $env
+   *   The BlueSnap environment of the payment gateway.
    *
    * @return \Drupal\Entity\EntityInterface
    *   The Drupal entity related to the given IPN data.
    */
-  public function getEntity(array $ipn_data);
+  public function getEntity(array $ipn_data, $env);
 
 }
