@@ -676,25 +676,16 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    */
   protected function ipnRefund(array $ipn_data) {
     $payment = $this->ipnHandler->getEntity($ipn_data);
-
-    // Get the refund amount.
-    $refund_amount = new Price(
-      $ipn_data['invoiceChargeAmount'],
-      $ipn_data['invoiceChargeCurrency']
-    );
-
-    // The refund amount should always be given at the currency of the
-    // transaction. If not, there's something wrong.
     $payment_amount = $payment->getAmount();
-    if ($payment_amount->getCurrencyCode() !== $refund_amount->getCurrencyCode()) {
-      $message = sprintf(
-        'The currency for the refund received for payment with ID "%s" was "s", "%s" expected',
-        $payment->id(),
-        $refund_amount->getCurrencyCode(),
-        $payment_amount->getCurrencyCode()
-      );
-      throw new \InvalidArgumentException($message);
-    }
+
+    // Get the refund amount. When getting the refunded amount from
+    // `reversalAmount` the currency is not specifically given; it is assumed
+    // the currency of the original transaction which should be the payment's
+    // currency.
+    $refund_amount = new Price(
+      $ipn_data['reversalAmount'],
+      $payment_amount->getCurrencyCode()
+    );
 
     // Update the payment.
     $old_refunded_amount = $payment->getRefundedAmount();
