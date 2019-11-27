@@ -36,9 +36,15 @@ class Ecp extends OnsiteBase {
     $payment_method = $payment->getPaymentMethod();
     $this->assertPaymentMethod($payment_method);
 
+    $remote_id = NULL;
+    $merchant_transaction_id = NULL;
+
     // Check whether the order is a recurring order, if yes perform the
     // recurring transaction.
-    $remote_id = $this->doCreatePaymentForSubscription($payment);
+    list(
+      $remote_id,
+      $merchant_transaction_id
+    ) = $this->doCreatePaymentForSubscription($payment);
 
     // Otherwise we have a regular transaction.
     if (!$remote_id) {
@@ -51,12 +57,14 @@ class Ecp extends OnsiteBase {
       );
       $result = $client->create($data);
       $remote_id = $result->id;
+      $merchant_transaction_id = $data['merchantTransactionId'];
     }
 
     // Mark the payment as pending; it will be marked as completed when we
     // receive the IPN signaling the payment was captured successfully.
     $payment->setState('pending');
     $payment->setRemoteId($remote_id);
+    $payment->set('bluesnap_merchant_transaction_id', $merchant_transaction_id);
     $payment->save();
   }
 
@@ -318,6 +326,7 @@ class Ecp extends OnsiteBase {
     $data = [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
+      'merchantTransactionId' => $this->uuid->generate(),
       // Authorization is captured by the payment method form.
       'authorizedByShopper' => TRUE,
       'transactionMetadata' => [
