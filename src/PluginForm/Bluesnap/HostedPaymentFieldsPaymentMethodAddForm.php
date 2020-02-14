@@ -8,6 +8,7 @@ use Drupal\commerce_bluesnap\Api\HostedPaymentFieldsClientInterface;
 
 use Drupal\commerce\InlineFormManager;
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
+use Drupal\commerce_store\CurrentStoreInterface;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -38,38 +39,49 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected $fraudSession;
 
   /**
+   * The route match object.
+   *
+   * @var \Drupal\Core\Routing\RouteMatchInterface
+   */
+  protected $routeMatch;
+
+  /**
    * Constructs a new HostedPaymentFieldsPaymentMethodAddForm.
    *
    * @param \Drupal\commerce\InlineFormManager $inline_form_manager
    *   The inline form manager.
-   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
-   *   The route match.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
    * @param \Drupal\commerce_bluesnap\Api\ClientFactory $client_factory
    *   The BlueSnap API client factory.
-   * @param Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
+   * @param \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
    *   The fraud session service.
+   * @param \Drupal\commerce_store\CurrentStoreInterface $current_store
+   *   The current store.
+   * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
+   *   The route match object.
    */
   public function __construct(
     InlineFormManager $inline_form_manager,
-    RouteMatchInterface $route_match,
     EntityTypeManagerInterface $entity_type_manager,
     LoggerInterface $logger,
     ClientFactory $client_factory,
-    FraudSessionInterface $fraud_session
+    FraudSessionInterface $fraud_session,
+    CurrentStoreInterface $current_store,
+    RouteMatchInterface $route_match
   ) {
     parent::__construct(
-      $inline_form_manager,
-      $route_match,
+      $current_store,
       $entity_type_manager,
+      $inline_form_manager,
       $logger
     );
 
     $this->clientFactory = $client_factory;
     $this->fraudSession = $fraud_session;
+    $this->routeMatch = $route_match;
   }
 
   /**
@@ -78,11 +90,12 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('plugin.manager.commerce_inline_form'),
-      $container->get('current_route_match'),
       $container->get('entity_type.manager'),
       $container->get('logger.factory')->get('commerce_payment'),
       $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.fraud_session')
+      $container->get('commerce_bluesnap.fraud_session'),
+      $container->get('commerce_store.current_store'),
+      $container->get('current_route_match')
     );
   }
 
@@ -254,13 +267,14 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
   protected function deviceDataCollectorIframe() {
     $merchant_id = NULL;
     $mode = $this->entity
-     ->getPaymentGateway()
-     ->getPlugin()
-     ->getBluesnapConfig()['env'];
+      ->getPaymentGateway()
+      ->getPlugin()
+      ->getBluesnapConfig()['env'];
 
     // Get the Kount merchant ID from the store settings, if we have one
-    // available for Enterprise accounts. We use the store for the current order,
-    // or the default store if we can't determine the store from the route.
+    // available for Enterprise accounts. We use the store for the current
+    // order, or the default store if we can't determine the store from the
+    // route.
     if ($order = $this->routeMatch->getParameter('commerce_order')) {
       $store = $order->getStore();
     }
