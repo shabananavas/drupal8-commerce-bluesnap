@@ -30,14 +30,6 @@ function commerce_bluesnap_requirements($phase) {
 }
 
 /**
- * Implements hook_install().
- */
-function commerce_bluesnap_install() {
-  \Drupal::service('commerce_bluesnap.field_service')
-    ->installSubscriptionRemoteIdField();
-}
-
-/**
  * Install the Remote ID base field for the Commerce Subscription entity.
  */
 function commerce_bluesnap_update_8001() {

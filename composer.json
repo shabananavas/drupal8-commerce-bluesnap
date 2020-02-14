@@ -26,6 +26,7 @@
     "shabananavas/php-bluesnap-sdk": "dev-master"
   },
   "suggest": {
-    "drupal/commerce_currency_resolver": "Enhancement for handling multicurrency for Drupal Commerce."
+    "drupal/commerce_currency_resolver": "Enhancement for handling multicurrency for Drupal Commerce.",
+    "drupal/commerce_recurring": "Provides recurring billing for Drupal Commerce."
   }
 }
