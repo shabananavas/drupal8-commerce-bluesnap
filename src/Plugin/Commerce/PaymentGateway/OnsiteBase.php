@@ -278,11 +278,11 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     );
     $data += $additional_data;
 
-    // We pass the Drupal user ID as the merchant shopper ID, only for
+    // We pass the Drupal user UUID as the merchant shopper ID, only for
     // authenticated users.
     $owner = $payment_method->getOwner();
     if ($owner->isAuthenticated()) {
-      $data['merchantShopperId'] = $payment_method->getOwner()->id();
+      $data['merchantShopperId'] = $payment_method->getOwner()->uuid();
     }
 
     // Create and return the vaulted shopper.
