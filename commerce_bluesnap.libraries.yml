@@ -9,6 +9,9 @@ bluesnap:
 
 hosted_payment_fields_form:
   version: VERSION
+  css:
+    theme:
+      css/commerce_bluesnap.hosted_payment_fields.form.css: {}
   js:
     js/commerce_bluesnap.hosted_payment_fields.form.js: {}
   dependencies:

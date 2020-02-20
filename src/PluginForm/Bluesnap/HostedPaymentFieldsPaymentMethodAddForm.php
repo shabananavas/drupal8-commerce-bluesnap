@@ -238,7 +238,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#title' => t('Card number'),
       '#required' => TRUE,
       '#validated' => TRUE,
-      '#markup' => '<div class="form-control" id="card-number" data-bluesnap="ccn"></div>',
+      '#markup' => '<div class="form-control hosted-field hosted-field--card-number" id="card-number" data-bluesnap="ccn"></div>',
     ];
 
     $element['expiration'] = [
@@ -246,7 +246,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#title' => t('Expiration date'),
       '#required' => TRUE,
       '#validated' => TRUE,
-      '#markup' => '<div class="form-control" id="exp-date" data-bluesnap="exp"></div>',
+      '#markup' => '<div class="form-control hosted-field hosted-field--exp-date" id="exp-date" data-bluesnap="exp"></div>',
     ];
 
     $element['security_code'] = [
@@ -254,7 +254,7 @@ class HostedPaymentFieldsPaymentMethodAddForm extends BasePaymentMethodAddForm {
       '#title' => t('CVV'),
       '#required' => TRUE,
       '#validated' => TRUE,
-      '#markup' => '<div class="form-control" id="cvv" data-bluesnap="cvv"></div>',
+      '#markup' => '<div class="form-control hosted-field hosted-field--cvv" id="cvv" data-bluesnap="cvv"></div>',
     ];
   }
 

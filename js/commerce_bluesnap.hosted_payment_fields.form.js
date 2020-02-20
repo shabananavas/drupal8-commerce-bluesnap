@@ -84,15 +84,26 @@
           },
           // Styling is optional.
           style: {
-            // Styling all inputs.
-            'input': {
+            // Styling for expiration span.
+            'span': {
+              'margin': '0',
+              'padding': '5px 3px 0 3px',
               'font-size': '14px',
               'font-family': 'Helvetica Neue,Helvetica,Arial,sans-serif',
               'line-height': '1.42857143',
-              'color': '#555'
+              'color': '#3b3b3b'
+            },
+            // Styling all inputs.
+            'input': {
+              'margin': '0',
+              'padding': '4px',
+              'font-size': '14px',
+              'font-family': 'Helvetica Neue,Helvetica,Arial,sans-serif',
+              'line-height': '1.42857143',
+              'color': '#3b3b3b'
             },
             ':focus': {
-              'color': '#555'
+              'color': '#3b3b3b'
             },
             '.invalid': {
               'color': 'red'

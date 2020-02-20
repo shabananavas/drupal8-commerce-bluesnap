@@ -1,0 +1,36 @@
+/**
+ * @file
+ * Styles for hosted payment fields.
+ */
+
+/* Inline form items. */
+.bluesnap-form > .form-item {
+  display: inline-block;
+  margin-right: 1em;
+}
+
+/* Fields. */
+.bluesnap-form .hosted-field {
+  position: relative;
+  padding: 0;
+  /* Force the dimensions of the field. */
+  /* The iframe and inputs within the field wrapper match the width and height set here. */
+  height: 30px;
+  max-width: 200px;
+  border: 1px solid #ccc;
+}
+
+/* Card Number field. */
+.bluesnap-form .hosted-field--card-number {
+  max-width: 220px;
+}
+
+/* Expiration Date field. */
+.bluesnap-form .hosted-field--exp-date {
+  max-width: 120px;
+}
+
+/* Security Code field. */
+.bluesnap-form .hosted-field--cvv {
+  max-width: 70px;
+}
