@@ -21,6 +21,8 @@ use Drupal\commerce_price\RounderInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Utility\Token;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -84,6 +86,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
    *   The BlueSnap IPN handler.
+   * @param \Drupal\Core\Utility\Token $token
+   *   The token service.
    * @param \Drupal\commerce_bluesnap\EnhancedData\DataInterface $enhanced_data
    *   The Bluesnap enhanced data service.
    * @param \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
@@ -101,6 +105,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     RounderInterface $rounder,
     ClientFactory $client_factory,
     IpnHandlerInterface $ipn_handler,
+    Token $token,
     DataInterface $enhanced_data,
     FraudSessionInterface $fraud_session
   ) {
@@ -115,7 +120,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $module_handler,
       $rounder,
       $client_factory,
-      $ipn_handler
+      $ipn_handler,
+      $token
     );
 
     $this->enhancedData = $enhanced_data;
@@ -142,9 +148,26 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.ipn_handler'),
+      $container->get('token'),
       $container->get('commerce_bluesnap.enhanced_data'),
       $container->get('commerce_bluesnap.fraud_session')
     );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function defaultConfiguration() {
+    $configuration = parent::defaultConfiguration();
+
+    foreach ($this->getPluginDefinition()['credit_card_types'] as $card_type) {
+      $configuration['statement_descriptors']['card_types'][$card_type] = [
+        'descriptor' => '',
+        'phone_number' => '',
+      ];
+    }
+
+    return $configuration;
   }
 
   /**
@@ -619,6 +642,9 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     // in both cases; fetch it from there.
     $data['vaultedShopperId'] = $payment_method->getRemoteId();
 
+    // Add statement descriptor.
+    $data += $this->prepareDescriptorData($payment);
+
     return $data;
   }
 
@@ -753,6 +779,10 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       ],
     ];
 
+    // Descriptor data are passed only when creating the subscription and not on
+    // individual charges.
+    $data += $this->prepareDescriptorData($payment);
+
     return $data;
   }
 
@@ -769,6 +799,106 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     );
 
     return $data + $level_2_3_data;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function buildDescriptorFormElement() {
+    $form = parent::buildDescriptorFormElement();
+    $config = &$this->configuration['statement_descriptors']['card_types'];
+
+    // Add the ability to customize statement descriptors per card type.
+    $form['statement_descriptors']['card_types'] = [
+      '#markup' => '<p>' . $this->t(
+        'You may specify statement descriptors for specific card types below. If
+        no descriptor or support phone number is defined for a card type, the
+        global descriptor or phone number defined here (or the ones defined in
+        the BlueSnap account if no globals are defined here) will be used.'
+      ) . '</p>',
+    ];
+
+    $card_types = $this->getPluginDefinition()['credit_card_types'];
+    foreach ($card_types as $card_type) {
+      $form['statement_descriptors']['card_types'][$card_type] = [
+        '#type' => 'fieldset',
+        '#title' => $card_type,
+        'descriptor' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Soft descriptor'),
+          '#default_value' => $config[$card_type]['descriptor'],
+        ],
+        'phone_number' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Support phone number'),
+          '#default_value' => $config[$card_type]['phone_number'],
+        ],
+      ];
+    }
+
+    return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function validateDescriptorFormElement(
+    array &$form,
+    FormStateInterface $form_state
+  ) {
+    parent::validateDescriptorFormElement($form, $form_state);
+
+    // Validate statement descriptors per card type.
+    $values = $form_state->getValue($form['#parents']);
+    $descriptors = &$values['statement_descriptors']['card_types'];
+
+    $card_types = $this->getPluginDefinition()['credit_card_types'];
+    foreach ($card_types as $card_type) {
+      $result = $this->validateDescriptor($descriptors[$card_type]['descriptor']);
+      if (!$result['valid']) {
+        $form_state->setError(
+          $form['statement_descriptors']['card_types'][$card_type]['descriptor'],
+          $result['error']
+        );
+      }
+
+      $result = $this->validateDescriptorPhoneNumber($descriptors[$card_type]['phone_number']);
+      if (!$result['valid']) {
+        $form_state->setError(
+          $form['statement_descriptors']['card_types'][$card_type]['phone_number'],
+          $result['error']
+        );
+      }
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function prepareDescriptorData(PaymentInterface $payment) {
+    $data = [];
+    $descriptors = &$this->configuration['statement_descriptors']['card_types'];
+    $card_type = $payment->getPaymentMethod()->get('card_type')->value;
+
+    // If there is a statement descriptor configured for the payment's card type
+    // use that.
+    if ($descriptors[$card_type]['descriptor']) {
+      $data['softDescriptor'] = $this->replaceDescriptorDataTokens(
+        $descriptors[$card_type]['descriptor'],
+        $payment
+      );
+    }
+    if ($descriptors[$card_type]['phone_number']) {
+      $data['descriptorPhoneNumber'] = $this->replaceDescriptorDataTokens(
+        $descriptors[$card_type]['phone_number'],
+        $payment
+      );
+    }
+
+    // Merge with the default descriptors. If a descriptor has been defined here
+    // it will be kept due to the use of the `+` operator; otherwise the default
+    // will be used.
+    return $data + parent::prepareDescriptorData($payment);
   }
 
 }
