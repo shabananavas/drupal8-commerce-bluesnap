@@ -807,6 +807,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
   protected function buildDescriptorFormElement() {
     $form = parent::buildDescriptorFormElement();
     $config = &$this->configuration['statement_descriptors']['card_types'];
+    $token_types = ['commerce_order', 'commerce_payment', 'commerce_store'];
 
     // Add the ability to customize statement descriptors per card type.
     $form['statement_descriptors']['card_types'] = [
@@ -827,11 +828,15 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
           '#type' => 'textfield',
           '#title' => $this->t('Soft descriptor'),
           '#default_value' => $config[$card_type]['descriptor'],
+          '#element_validate' => ['token_element_validate'],
+          '#token_types' => $token_types,
         ],
         'phone_number' => [
           '#type' => 'textfield',
           '#title' => $this->t('Support phone number'),
           '#default_value' => $config[$card_type]['phone_number'],
+          '#element_validate' => ['token_element_validate'],
+          '#token_types' => $token_types,
         ],
       ];
     }
