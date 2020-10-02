@@ -744,6 +744,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       '#type' => 'textfield',
       '#title' => $this->t('Support phone number'),
       '#default_value' => $config['phone_number'],
+      '#element_validate' => ['token_element_validate'],
+      '#token_types' => $token_types,
     ];
     $form['statement_descriptors']['token_help'] = [
       '#theme' => 'token_tree_link',
