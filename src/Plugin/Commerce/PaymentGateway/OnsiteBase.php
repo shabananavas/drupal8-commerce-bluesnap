@@ -604,8 +604,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     return FALSE;
   }
 
-   /**
-    * {@inheritdoc}
+  /**
+   * {@inheritdoc}
    */
   protected function setRemoteCustomerId(UserInterface $account, $remote_id) {
     if (!$account->isAuthenticated()) {
@@ -640,7 +640,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The provider key string for setting remote ID.
    */
   protected function remoteCustomerIdProviderKey() {
-    return 'bluesnap_' . $this->configuration['username'] . '|'. $this->getMode();
+    return 'bluesnap_' . $this->configuration['username'] . '|' . $this->getMode();
   }
 
 }
