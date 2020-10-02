@@ -375,7 +375,7 @@ class Ecp extends OnsiteBase {
         'accountNumber' => $payment_method->account_number->value,
       ],
     ];
-    unset($data['ecpTransactione']);
+    unset($data['ecpTransaction']);
 
     return $data;
   }
