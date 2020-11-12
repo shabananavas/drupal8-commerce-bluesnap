@@ -21,6 +21,8 @@ use Drupal\commerce_price\RounderInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Utility\Token;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -84,6 +86,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
    *   The BlueSnap IPN handler.
+   * @param \Drupal\Core\Utility\Token $token
+   *   The token service.
    * @param \Drupal\commerce_bluesnap\EnhancedData\DataInterface $enhanced_data
    *   The Bluesnap enhanced data service.
    * @param \Drupal\commerce_bluesnap\FraudPrevention\FraudSessionInterface $fraud_session
@@ -101,6 +105,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     RounderInterface $rounder,
     ClientFactory $client_factory,
     IpnHandlerInterface $ipn_handler,
+    Token $token,
     DataInterface $enhanced_data,
     FraudSessionInterface $fraud_session
   ) {
@@ -115,7 +120,8 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $module_handler,
       $rounder,
       $client_factory,
-      $ipn_handler
+      $ipn_handler,
+      $token
     );
 
     $this->enhancedData = $enhanced_data;
@@ -142,6 +148,7 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
       $container->get('commerce_bluesnap.ipn_handler'),
+      $container->get('token'),
       $container->get('commerce_bluesnap.enhanced_data'),
       $container->get('commerce_bluesnap.fraud_session')
     );
@@ -619,6 +626,9 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
     // in both cases; fetch it from there.
     $data['vaultedShopperId'] = $payment_method->getRemoteId();
 
+    // Add statement descriptor.
+    $data += $this->prepareDescriptorData($payment);
+
     return $data;
   }
 
@@ -752,6 +762,10 @@ class HostedPaymentFields extends OnsiteBase implements HostedPaymentFieldsInter
         'cardType' => $payment_method->card_type->value,
       ],
     ];
+
+    // Descriptor data are passed only when creating the subscription and not on
+    // individual charges.
+    $data += $this->prepareDescriptorData($payment);
 
     return $data;
   }

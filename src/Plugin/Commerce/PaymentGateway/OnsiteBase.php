@@ -21,6 +21,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\Utility\Token;
 use Drupal\user\UserInterface;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -59,6 +60,13 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   protected $ipnHandler;
 
   /**
+   * The token service.
+   *
+   * @var \Drupal\Core\Utility\Token
+   */
+  protected $token;
+
+  /**
    * Constructs a new OnsiteBase object.
    *
    * @param array $configuration
@@ -83,6 +91,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    *   The Bluesnap API client factory.
    * @param \Drupal\commerce_bluesnap\Ipn\HandlerInterface $ipn_handler
    *   The BlueSnap IPN handler.
+   * @param \Drupal\Core\Utility\Token $token
+   *   The token service.
    */
   public function __construct(
     array $configuration,
@@ -95,7 +105,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     ModuleHandlerInterface $module_handler,
     RounderInterface $rounder,
     ClientFactory $client_factory,
-    IpnHandlerInterface $ipn_handler
+    IpnHandlerInterface $ipn_handler,
+    Token $token
   ) {
     parent::__construct(
       $configuration,
@@ -111,6 +122,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     $this->rounder = $rounder;
     $this->clientFactory = $client_factory;
     $this->ipnHandler = $ipn_handler;
+    $this->token = $token;
   }
 
   /**
@@ -132,7 +144,8 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
       $container->get('module_handler'),
       $container->get('commerce_price.rounder'),
       $container->get('commerce_bluesnap.client_factory'),
-      $container->get('commerce_bluesnap.ipn_handler')
+      $container->get('commerce_bluesnap.ipn_handler'),
+      $container->get('token')
     );
   }
 
@@ -143,6 +156,10 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     return [
       'username' => '',
       'password' => '',
+      'statement_descriptors' => [
+        'descriptor' => '',
+        'phone_number' => '',
+      ],
     ] + parent::defaultConfiguration();
   }
 
@@ -155,21 +172,22 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   ) {
     $form = parent::buildConfigurationForm($form, $form_state);
 
-    $form['username'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Username'),
-      '#default_value' => $this->configuration['username'],
-      '#required' => TRUE,
-    ];
-
-    $form['password'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Password'),
-      '#default_value' => $this->configuration['password'],
-      '#required' => TRUE,
-    ];
+    $form += $this->buildAuthenticationFormElement();
+    $form += $this->buildDescriptorFormElement();
 
     return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function validateConfigurationForm(
+    array &$form,
+    FormStateInterface $form_state
+  ) {
+    parent::validateConfigurationForm($form, $form_state);
+
+    $this->validateDescriptorFormElement($form, $form_state);
   }
 
   /**
@@ -181,12 +199,16 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
   ) {
     parent::submitConfigurationForm($form, $form_state);
 
-    if (!$form_state->getErrors()) {
-      $values = $form_state->getValue($form['#parents']);
-
-      $this->configuration['username'] = $values['username'];
-      $this->configuration['password'] = $values['password'];
+    if ($form_state->getErrors()) {
+      return;
     }
+
+    $values = $form_state->getValue($form['#parents']);
+    $config = &$this->configuration;
+
+    $config['username'] = $values['authentication']['username'];
+    $config['password'] = $values['authentication']['password'];
+    $config['statement_descriptors'] = $values['statement_descriptors'];
   }
 
   /**
@@ -521,7 +543,7 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
     $amount = $payment->getAmount();
     $amount = $this->rounder->round($amount);
 
-    // Create the subscription data.
+    // Create the subscription charge data.
     return [
       'currency' => $amount->getCurrencyCode(),
       'amount' => $amount->getNumber(),
@@ -641,6 +663,293 @@ abstract class OnsiteBase extends OnsitePaymentGatewayBase implements OnsiteInte
    */
   protected function remoteCustomerIdProviderKey() {
     return 'bluesnap_' . $this->configuration['username'] . '|' . $this->getMode();
+  }
+
+  /**
+   * Returns the form element that contains the authentication fields.
+   *
+   * @return array
+   *   The authentication form element render array.
+   */
+  protected function buildAuthenticationFormElement() {
+    $form = [];
+
+    $form['authentication'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Authentication'),
+      '#open' => TRUE,
+    ];
+    $form['authentication']['username'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Username'),
+      '#default_value' => $this->configuration['username'],
+      '#required' => TRUE,
+    ];
+    $form['authentication']['password'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Password'),
+      '#default_value' => $this->configuration['password'],
+      '#required' => TRUE,
+    ];
+
+    return $form;
+  }
+
+  /**
+   * Returns the form element that contains the statement descriptors fields.
+   *
+   * @return array
+   *   The statement descriptors form element render array.
+   */
+  protected function buildDescriptorFormElement() {
+    $form = [];
+    $config = &$this->configuration['statement_descriptors'];
+    $token_types = ['commerce_order', 'commerce_payment', 'commerce_store'];
+
+    $form['statement_descriptors'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Statement descriptors'),
+    ];
+
+    $form['statement_descriptors']['help'] = [
+      '#markup' => $this->t(
+        'You can override the statement descriptor and the support phone number
+        appended in the descriptor here. If left empty, the default descriptor
+        and phone number configured in the BlueSnap account will be used.
+        <a href="@link" target="_blank">Learn more</a>',
+        ['@link' => 'https://support.bluesnap.com/docs/statement-descriptor']
+      ),
+    ];
+    $form['statement_descriptors']['help_2'] = [
+      '#markup' => '<p>' . $this->t(
+        'If you use tokens in statement descriptors or support phone numbers,
+        make sure that the selected values that will be replaced at the moment
+        the payment is made will always comply with the
+        <a href="@link" target="_blank">allowed characters</a>; payments for
+        which statement descriptors or support phone numbers contain illegal
+        characters or are longer than the maximum length permitted by BlueSnap
+        may fail and it may not be possible for the customers to continue and
+        place their orders.',
+        ['@link' => 'https://support.bluesnap.com/docs/statement-descriptor#statement-descriptor-format-and-content']
+      ) . '</p>',
+    ];
+    $form['statement_descriptors']['descriptor'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Soft descriptor'),
+      '#default_value' => $config['descriptor'],
+      '#element_validate' => ['token_element_validate'],
+      '#token_types' => $token_types,
+    ];
+    $form['statement_descriptors']['phone_number'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Support phone number'),
+      '#default_value' => $config['phone_number'],
+      '#element_validate' => ['token_element_validate'],
+      '#token_types' => $token_types,
+    ];
+    $form['statement_descriptors']['token_help'] = [
+      '#theme' => 'token_tree_link',
+      '#token_types' => $token_types,
+      '#show_restricted' => TRUE,
+      '#global_types' => FALSE,
+      '#weight' => 90,
+    ];
+
+    return $form;
+  }
+
+  /**
+   * Validates the form element(s) that contain statement descriptors.
+   *
+   * @param array $form
+   *   The form render array.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state object.
+   */
+  protected function validateDescriptorFormElement(
+    array &$form,
+    FormStateInterface $form_state
+  ) {
+    $values = $form_state->getValue($form['#parents']);
+    if (!$values['statement_descriptors']['descriptor']) {
+      return;
+    }
+
+    $descriptors = &$values['statement_descriptors'];
+    $result = $this->validateDescriptor($descriptors['descriptor']);
+    if (!$result['valid']) {
+      $form_state->setError(
+        $form['statement_descriptors']['descriptor'],
+        $result['error']
+      );
+    }
+    $result = $this->validateDescriptorPhoneNumber($descriptors['phone_number']);
+    if (!$result['valid']) {
+      $form_state->setError(
+        $form['statement_descriptors']['phone_number'],
+        $result['error']
+      );
+    }
+  }
+
+  /**
+   * Validates that the given descriptor contains only allowed characters.
+   *
+   * @param string $descriptor
+   *   The descriptor to validate.
+   *
+   * @return bool
+   *   TRUE if the descriptor is valid, FALSE otherwise.
+   */
+  protected function validateDescriptor($descriptor) {
+    // We validate after removing tokens which contain not allowed characters
+    // and also make the string longer than the maximum length.
+    $token_free_descriptor = $this->removeTokensFromString($descriptor);
+
+    if ($token_free_descriptor === '') {
+      return ['valid' => TRUE];
+    }
+
+    // Allowed characters and length described at
+    // https://support.bluesnap.com/docs/statement-descriptor.
+    $regex = '/\A[A-Za-z0-9 ' . preg_quote('&,.-#') . ']+\z/';
+    if (!preg_match($regex, $token_free_descriptor)) {
+      return [
+        'valid' => FALSE,
+        'error' => $this->t(
+          'Statement descriptors may only contain alphanumeric characters,
+          spaces, and these special characters: & , . - #'
+        ),
+      ];
+    }
+
+    if (strlen($token_free_descriptor) > 20) {
+      return [
+        'valid' => FALSE,
+        'error' => $this->t(
+          'Statement descriptors cannot be longer than 20 characters.'
+        ),
+      ];
+    }
+
+    return ['valid' => TRUE];
+  }
+
+  /**
+   * Validates that the given phone number contains only allowed characters.
+   *
+   * @param string $phone
+   *   The descriptor phone number to validate.
+   *
+   * @return bool
+   *   TRUE if the phone number is valid, FALSE otherwise.
+   */
+  protected function validateDescriptorPhoneNumber($phone) {
+    // We validate after removing tokens which contain not allowed characters
+    // and also make the string longer than the maximum length.
+    $token_free_phone = $this->removeTokensFromString($phone);
+
+    if ($token_free_phone === '') {
+      return ['valid' => TRUE];
+    }
+
+    // Allowed characters and length described at
+    // https://support.bluesnap.com/docs/statement-descriptor.
+    $regex = '/\A[0-9]+\z/';
+    if (!preg_match($regex, $token_free_phone)) {
+      return [
+        'valid' => FALSE,
+        'error' => $this->t(
+          'Statement descriptor support phone numbers may only contain numeric
+          characters.'
+        ),
+      ];
+    }
+
+    if (strlen($token_free_phone) > 12) {
+      return [
+        'valid' => FALSE,
+        'error' => $this->t(
+          'Statement descriptor phone numbers cannot be longer than 12
+          characters.'
+        ),
+      ];
+    }
+
+    return ['valid' => TRUE];
+  }
+
+  /**
+   * Remove tokens from the given string.
+   *
+   * @param string $string
+   *   The string to remove tokens from.
+   *
+   * @return string
+   *   The string with the tokens removed.
+   */
+  protected function removeTokensFromString($string) {
+    return preg_replace(
+      '(\[[A-Za-z0-9_\-]+:[A-Za-z0-9_\-]+\])',
+      '',
+      $string
+    );
+  }
+
+  /**
+   * Prepares the statement descriptor data that will be sent to BlueSnap.
+   *
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return array
+   *   An array containing the descriptor data.
+   */
+  protected function prepareDescriptorData(PaymentInterface $payment) {
+    $data = [];
+    $descriptors = &$this->configuration['statement_descriptors'];
+
+    if ($descriptors['descriptor']) {
+      $data['softDescriptor'] = $this->replaceDescriptorDataTokens(
+        $descriptors['descriptor'],
+        $payment
+      );
+    }
+    if ($descriptors['phone_number']) {
+      $data['descriptorPhoneNumber'] = $this->replaceDescriptorDataTokens(
+        $descriptors['phone_number'],
+        $payment
+      );
+    }
+
+    return $data;
+  }
+
+  /**
+   * Replaces the tokens available for statement descriptor values.
+   *
+   * @param string $value
+   *   The value to replace the tokens for.
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment.
+   *
+   * @return string
+   *   The value with the replaced tokens.
+   */
+  protected function replaceDescriptorDataTokens(
+    $value,
+    PaymentInterface $payment
+  ) {
+    $order = $payment->getOrder();
+
+    return $this->token->replace(
+      $value,
+      [
+        'commerce_order' => $order,
+        'commerce_payment' => $payment,
+        'commerce_store' => $order->getStore(),
+      ]
+    );
   }
 
 }

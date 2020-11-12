@@ -348,6 +348,9 @@ class Ecp extends OnsiteBase {
     // in both cases; fetch it from there.
     $data['vaultedShopperId'] = $payment_method->getRemoteId();
 
+    // Add statement descriptor.
+    $data += $this->prepareDescriptorData($payment);
+
     return $data;
   }
 
@@ -376,6 +379,10 @@ class Ecp extends OnsiteBase {
       ],
     ];
     unset($data['ecpTransaction']);
+
+    // Descriptor data are passed only when creating the subscription and not on
+    // individual charges.
+    $data += $this->prepareDescriptorData($payment);
 
     return $data;
   }
